@@ -140,34 +140,6 @@
                                           placeholder="Mô tả chi tiết tình huống xe dừng khẩn cấp..." required></textarea>
                                 <small class="text-muted">VD: Xe tải đang dừng ở làn khẩn cấp, có khói bốc ra từ động cơ</small>
                             </div>
-                            
-                            <div class="form-group">
-                                <label>Loại phương tiện</label>
-                                <select class="form-control" id="vehicleType">
-                                    <option value="">-- Chọn loại phương tiện --</option>
-                                    <option value="xe_con">Xe con</option>
-                                    <option value="xe_khach">Xe khách</option>
-                                    <option value="xe_tai">Xe tải</option>
-                                    <option value="xe_container">Xe container</option>
-                                    <option value="xe_may">Xe máy</option>
-                                    <option value="khac">Khác</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label>Mức độ nghiêm trọng</label>
-                                <div class="btn-group btn-group-toggle w-100" data-toggle="buttons">
-                                    <label class="btn btn-outline-success">
-                                        <input type="radio" name="severity" value="low"> Thấp
-                                    </label>
-                                    <label class="btn btn-outline-warning active">
-                                        <input type="radio" name="severity" value="medium" checked> Trung bình
-                                    </label>
-                                    <label class="btn btn-outline-danger">
-                                        <input type="radio" name="severity" value="high"> Cao
-                                    </label>
-                                </div>
-                            </div>
                         </div>
                     </div>
                     
@@ -398,10 +370,10 @@
                 formData.append('longitude', longitude);
                 formData.append('description', description);
                 
-                // Add first image if exists
-                if (selectedFiles.length > 0) {
-                    formData.append('image', selectedFiles[0]);
-                }
+                // Add all images with same key 'image' (backend accepts List<MultipartFile>)
+                selectedFiles.forEach(file => {
+                    formData.append('image', file);
+                });
                 
                 fetch('/api/incidents', {
                     method: 'POST',
@@ -411,22 +383,6 @@
                 .then(response => {
                     if (!response.ok) throw new Error('Network response was not ok');
                     return response.json();
-                })
-                .then(data => {
-                    // Upload additional images
-                    if (selectedFiles.length > 1) {
-                        const additionalUploads = selectedFiles.slice(1).map(file => {
-                            const imgFormData = new FormData();
-                            imgFormData.append('image', file);
-                            return fetch(`/api/incidents/${data.id}/images`, {
-                                method: 'POST',
-                                headers: { 'Authorization': 'Bearer ' + token },
-                                body: imgFormData
-                            });
-                        });
-                        return Promise.all(additionalUploads).then(() => data);
-                    }
-                    return data;
                 })
                 .then(data => {
                     showToast('Đã tạo sự cố thành công!', 'success');

@@ -41,14 +41,17 @@ public class IncidentService {
     private static final String[] ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"};
 
     /**
-     * UC-01: Create incident with initial image
+     * UC-01: Create incident with initial images (supports multiple files)
      * Status: DETECTED, detection_time: now()
      */
-    public IncidentResponse createIncident(IncidentRequest request, MultipartFile imageFile) throws IOException {
-        log.info("Creating incident at location ({}, {})", request.getLatitude(), request.getLongitude());
+    public IncidentResponse createIncident(IncidentRequest request, List<MultipartFile> imageFiles) throws IOException {
+        log.info("Creating incident at location ({}, {}) with {} images", 
+                request.getLatitude(), request.getLongitude(), imageFiles.size());
 
-        // Validate image
-        validateImage(imageFile);
+        // Validate all images first
+        for (MultipartFile imageFile : imageFiles) {
+            validateImage(imageFile);
+        }
 
         // Create incident
         Incident incident = Incident.builder()
@@ -61,14 +64,20 @@ public class IncidentService {
 
         incident = incidentRepository.save(incident);
 
-        // Save image
-        IncidentImage incidentImage = saveImage(incident, imageFile);
+        // Save all images
+        List<IncidentImage> savedImages = new java.util.ArrayList<>();
+        for (MultipartFile imageFile : imageFiles) {
+            IncidentImage incidentImage = saveImage(incident, imageFile);
+            savedImages.add(incidentImage);
+        }
 
-        // Return response with image
+        // Return response with all images
         IncidentResponse response = incidentMapper.toResponse(incident);
-        response.setImages(List.of(incidentImageMapper.toResponse(incidentImage)));
+        response.setImages(savedImages.stream()
+                .map(incidentImageMapper::toResponse)
+                .toList());
 
-        log.info("Incident created with id: {}", incident.getId());
+        log.info("Incident created with id: {}, saved {} images", incident.getId(), savedImages.size());
         
         // Broadcast incident created event via WebSocket
         webSocketHandler.broadcastIncidentCreated(response);

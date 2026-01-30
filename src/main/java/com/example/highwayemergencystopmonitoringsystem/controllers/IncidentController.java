@@ -30,9 +30,9 @@ public class IncidentController {
     private final IncidentService incidentService;
 
     /**
-     * UC-01: Create incident with initial image
+     * UC-01: Create incident with initial images (supports multiple files)
      * POST /api/incidents
-     * Request: multipart/form-data with IncidentRequest (latitude, longitude, description) + image file
+     * Request: multipart/form-data with IncidentRequest (latitude, longitude, description) + image file(s)
      * Response: IncidentResponse with status=DETECTED, detection_time=now()
      */
     @PostMapping
@@ -40,7 +40,7 @@ public class IncidentController {
             @Valid @RequestParam("latitude") Double latitude,
             @Valid @RequestParam("longitude") Double longitude,
             @Valid @RequestParam("description") String description,
-            @RequestParam("image") MultipartFile imageFile) {
+            @RequestParam("image") List<MultipartFile> imageFiles) {
 
         try {
             IncidentRequest request = IncidentRequest.builder()
@@ -49,8 +49,8 @@ public class IncidentController {
                     .description(description)
                     .build();
 
-            IncidentResponse response = incidentService.createIncident(request, imageFile);
-            log.info("Incident created with id: {}", response.getId());
+            IncidentResponse response = incidentService.createIncident(request, imageFiles);
+            log.info("Incident created with id: {}, images: {}", response.getId(), imageFiles.size());
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (IOException e) {
             log.error("Error creating incident", e);

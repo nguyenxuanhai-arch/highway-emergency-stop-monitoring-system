@@ -326,6 +326,13 @@
                     renderIncident();
                     document.getElementById('loadingState').style.display = 'none';
                     document.getElementById('incidentContent').style.display = 'block';
+                    
+                    // Fix: Invalidate map size after content becomes visible
+                    if (map) {
+                        setTimeout(function() {
+                            map.invalidateSize();
+                        }, 200);
+                    }
                 })
                 .catch(error => {
                     console.error('Error:', error);
@@ -397,6 +404,11 @@
                     .addTo(map)
                     .bindPopup(`<strong>${incident.description}</strong>`)
                     .openPopup();
+                
+                // Fix: Invalidate map size after render to ensure tiles load correctly
+                setTimeout(function() {
+                    map.invalidateSize();
+                }, 100);
             }
             
             function renderImages() {
