@@ -768,6 +768,31 @@
                 document.getElementById('statDetected').textContent = stats.DETECTED;
                 document.getElementById('statConfirmed').textContent = stats.CONFIRMED;
                 document.getElementById('statResolved').textContent = stats.RESOLVED;
+                
+                // Load quick statistics from API
+                loadQuickStatistics();
+            }
+            
+            // Load quick statistics (avg processing time, today, this week)
+            function loadQuickStatistics() {
+                fetch('/api/dashboard/statistics', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Statistics loaded:', data);
+                    
+                    // Update UI
+                    document.getElementById('avgResponseTime').textContent = data.avgProcessingTime || '--';
+                    document.getElementById('todayIncidents').textContent = data.todayIncidents || 0;
+                    document.getElementById('weekIncidents').textContent = data.weekIncidents || 0;
+                })
+                .catch(error => {
+                    console.error('Error loading statistics:', error);
+                });
             }
 
             // Open image in modal
