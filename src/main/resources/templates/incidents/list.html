@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" 
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layouts/main}">
+<head>
+    <title>Danh sách sự cố</title>
+    
+    <th:block layout:fragment="head">
+        <!-- DataTables CSS -->
+        <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
+        <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap4.min.css">
+        
+        <style>
+            .incident-status {
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 600;
+                text-transform: uppercase;
+            }
+
+            .status-detected { background: #f8d7da; color: #721c24; }
+            .status-confirmed { background: #fff3cd; color: #856404; }
+            .status-resolved { background: #d4edda; color: #155724; }
+            
+            .table td { vertical-align: middle !important; }
+            
+            .btn-action { padding: 2px 8px; font-size: 12px; }
+            
+            .incident-thumbnail {
+                width: 50px;
+                height: 50px;
+                border-radius: 4px;
+                object-fit: cover;
+                cursor: pointer;
+            }
+            
+            .filter-card .form-control {
+                font-size: 14px;
+            }
+        </style>
+    </th:block>
+</head>
+
+<body>
+    <!-- Content Header -->
+    <th:block layout:fragment="content-header">
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-2">
+                    <div class="col-sm-6">
+                        <h1 class="m-0">
+                            <i class="fas fa-list mr-2"></i>Danh sách sự cố
+                        </h1>
+                    </div>
+                    <div class="col-sm-6">
+                        <ol class="breadcrumb float-sm-right">
+                            <li class="breadcrumb-item"><a href="/dashboard">Home</a></li>
+                            <li class="breadcrumb-item"><a href="#">Quản lý sự cố</a></li>
+                            <li class="breadcrumb-item active">Danh sách</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+    <!-- Main Content -->
+    <th:block layout:fragment="content">
+        <!-- Filter Card -->
+        <div class="card card-outline card-info filter-card collapsed-card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-filter mr-2"></i>Bộ lọc
+                </h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body" style="display: none;">
+                <form id="filterForm">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>Trạng thái</label>
+                                <select class="form-control" id="filterStatus">
+                                    <option value="">Tất cả</option>
+                                    <option value="DETECTED">Phát hiện</option>
+                                    <option value="CONFIRMED">Đã xác nhận</option>
+                                    <option value="RESOLVED">Đã xử lý</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>Từ ngày</label>
+                                <input type="date" class="form-control" id="filterFromDate">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>Đến ngày</label>
+                                <input type="date" class="form-control" id="filterToDate">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>&nbsp;</label>
+                                <div>
+                                    <button type="button" class="btn btn-primary" onclick="applyFilter()">
+                                        <i class="fas fa-search mr-1"></i>Lọc
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" onclick="clearFilter()">
+                                        <i class="fas fa-times mr-1"></i>Xóa bộ lọc
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Incidents Table Card -->
+        <div class="card card-outline card-primary">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-table mr-2"></i>Danh sách sự cố
+                    <span class="badge badge-info ml-2" id="totalCount">0</span>
+                </h3>
+                <div class="card-tools">
+                    <a href="/incidents/create" class="btn btn-success btn-sm">
+                        <i class="fas fa-plus mr-1"></i>Báo cáo sự cố mới
+                    </a>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <table id="incidentsTable" class="table table-bordered table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;">ID</th>
+                            <th style="width: 80px;">Ảnh</th>
+                            <th>Mô tả</th>
+                            <th style="width: 150px;">Vị trí</th>
+                            <th style="width: 100px;">Trạng thái</th>
+                            <th style="width: 150px;">Thời gian phát hiện</th>
+                            <th style="width: 150px;">Thời gian xử lý</th>
+                            <th style="width: 150px;">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="incidentsTableBody">
+                        <!-- Data loaded via JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Incident Detail Modal -->
+        <div class="modal fade" id="incidentDetailModal" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary">
+                        <h5 class="modal-title text-white">
+                            <i class="fas fa-info-circle mr-2"></i>Chi tiết sự cố #<span id="modalIncidentId"></span>
+                        </h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body" id="modalBody">
+                        <!-- Content loaded dynamically -->
+                    </div>
+                    <div class="modal-footer" id="modalFooter">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Đóng</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+    <!-- Page Scripts -->
+    <th:block layout:fragment="scripts">
+        <!-- DataTables JS -->
+        <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+        <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap4.min.js"></script>
+        <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+        <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.bootstrap4.min.js"></script>
+        
+        <script>
+            let incidentsData = [];
+            let dataTable;
+            
+            // Load incidents from API
+            function loadIncidents() {
+                fetch('/api/incidents', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    incidentsData = data;
+                    renderTable(data);
+                    document.getElementById('totalCount').textContent = data.length;
+                })
+                .catch(error => {
+                    console.error('Error loading incidents:', error);
+                    showToast('Không thể tải danh sách sự cố', 'error');
+                });
+            }
+            
+            // Render table data
+            function renderTable(data) {
+                const tbody = document.getElementById('incidentsTableBody');
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                                Không có dữ liệu
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+                
+                tbody.innerHTML = data.map(incident => `
+                    <tr>
+                        <td class="text-center font-weight-bold">#${incident.id}</td>
+                        <td class="text-center">
+                            ${incident.images && incident.images.length > 0 
+                                ? `<img src="/api/incidents/image/${incident.images[0].filePath}" 
+                                        class="incident-thumbnail" 
+                                        onclick="openImageModal('/api/incidents/image/${incident.images[0].filePath}')"
+                                        onerror="this.src='https://via.placeholder.com/50?text=N/A'">`
+                                : '<span class="text-muted">-</span>'
+                            }
+                        </td>
+                        <td>${escapeHtml(incident.description)}</td>
+                        <td class="small">
+                            <i class="fas fa-map-marker-alt text-danger mr-1"></i>
+                            ${incident.latitude.toFixed(4)}, ${incident.longitude.toFixed(4)}
+                        </td>
+                        <td class="text-center">
+                            <span class="incident-status status-${incident.status.toLowerCase()}">
+                                ${getStatusText(incident.status)}
+                            </span>
+                        </td>
+                        <td class="small">${formatDateTime(incident.detectionTime)}</td>
+                        <td class="small">${incident.resolutionTime ? formatDateTime(incident.resolutionTime) : '-'}</td>
+                        <td class="text-center">
+                            <button class="btn btn-info btn-action" onclick="viewIncident(${incident.id})" title="Xem chi tiết">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${incident.status === 'DETECTED' ? `
+                                <button class="btn btn-warning btn-action" onclick="confirmIncident(${incident.id})" title="Xác nhận">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            ` : ''}
+                            ${incident.status !== 'RESOLVED' ? `
+                                <button class="btn btn-success btn-action" onclick="resolveIncident(${incident.id})" title="Xử lý xong">
+                                    <i class="fas fa-check-double"></i>
+                                </button>
+                            ` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+                
+                // Initialize or reload DataTable
+                if (dataTable) {
+                    dataTable.destroy();
+                }
+                dataTable = $('#incidentsTable').DataTable({
+                    language: {
+                        url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/vi.json'
+                    },
+                    order: [[0, 'desc']],
+                    pageLength: 10,
+                    responsive: true
+                });
+            }
+            
+            // View incident detail
+            function viewIncident(id) {
+                const incident = incidentsData.find(i => i.id === id);
+                if (!incident) return;
+                
+                document.getElementById('modalIncidentId').textContent = incident.id;
+                
+                let imagesHtml = '<p class="text-muted">Không có hình ảnh</p>';
+                if (incident.images && incident.images.length > 0) {
+                    imagesHtml = `
+                        <div class="row">
+                            ${incident.images.map(img => `
+                                <div class="col-md-4 mb-3">
+                                    <img src="/api/incidents/image/${img.filePath}" 
+                                         class="img-fluid rounded cursor-pointer"
+                                         style="cursor: pointer; max-height: 150px; object-fit: cover; width: 100%;"
+                                         onclick="openImageModal('/api/incidents/image/${img.filePath}')"
+                                         onerror="this.src='https://via.placeholder.com/150?text=Error'">
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+                
+                const statusClass = `status-${incident.status.toLowerCase()}`;
+                
+                document.getElementById('modalBody').innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Thông tin cơ bản</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr>
+                                    <td class="font-weight-bold" style="width: 40%;">Trạng thái:</td>
+                                    <td><span class="incident-status ${statusClass}">${getStatusText(incident.status)}</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="font-weight-bold">Mô tả:</td>
+                                    <td>${escapeHtml(incident.description)}</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-weight-bold">Vị trí:</td>
+                                    <td>
+                                        <a href="https://www.google.com/maps?q=${incident.latitude},${incident.longitude}" 
+                                           target="_blank" class="text-primary">
+                                            ${incident.latitude.toFixed(6)}, ${incident.longitude.toFixed(6)}
+                                            <i class="fas fa-external-link-alt ml-1"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Thời gian</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr>
+                                    <td class="font-weight-bold" style="width: 50%;">Phát hiện:</td>
+                                    <td>${formatDateTime(incident.detectionTime)}</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-weight-bold">Xử lý xong:</td>
+                                    <td>${incident.resolutionTime ? formatDateTime(incident.resolutionTime) : '<span class="text-muted">-</span>'}</td>
+                                </tr>
+                                ${incident.resolutionTime ? `
+                                <tr>
+                                    <td class="font-weight-bold">Thời gian xử lý:</td>
+                                    <td class="text-success">${calculateDuration(incident.detectionTime, incident.resolutionTime)}</td>
+                                </tr>
+                                ` : ''}
+                            </table>
+                        </div>
+                    </div>
+                    <hr>
+                    <h6 class="text-muted">Hình ảnh minh chứng (${incident.images?.length || 0})</h6>
+                    ${imagesHtml}
+                `;
+                
+                // Update footer buttons based on status
+                let footerButtons = '<button type="button" class="btn btn-secondary" data-dismiss="modal">Đóng</button>';
+                
+                if (incident.status === 'DETECTED') {
+                    footerButtons = `
+                        <button type="button" class="btn btn-warning" onclick="confirmIncident(${incident.id}); $('#incidentDetailModal').modal('hide');">
+                            <i class="fas fa-check mr-1"></i>Xác nhận sự cố
+                        </button>
+                    ` + footerButtons;
+                }
+                
+                if (incident.status !== 'RESOLVED') {
+                    footerButtons = `
+                        <button type="button" class="btn btn-success" onclick="resolveIncident(${incident.id}); $('#incidentDetailModal').modal('hide');">
+                            <i class="fas fa-check-double mr-1"></i>Đánh dấu xử lý xong
+                        </button>
+                    ` + footerButtons;
+                }
+                
+                document.getElementById('modalFooter').innerHTML = footerButtons;
+                
+                $('#incidentDetailModal').modal('show');
+            }
+            
+            // Confirm incident
+            function confirmIncident(id) {
+                if (!confirm('Xác nhận sự cố #' + id + '?')) return;
+                
+                fetch(`/api/incidents/${id}/confirm`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed');
+                    return response.json();
+                })
+                .then(data => {
+                    showToast('Đã xác nhận sự cố!', 'success');
+                    loadIncidents();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Lỗi xác nhận sự cố!', 'error');
+                });
+            }
+            
+            // Resolve incident
+            function resolveIncident(id) {
+                if (!confirm('Đánh dấu sự cố #' + id + ' đã xử lý xong?')) return;
+                
+                fetch(`/api/incidents/${id}/resolve`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed');
+                    return response.json();
+                })
+                .then(data => {
+                    showToast('Đã xử lý sự cố thành công!', 'success');
+                    loadIncidents();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Lỗi xử lý sự cố!', 'error');
+                });
+            }
+            
+            // Apply filter
+            function applyFilter() {
+                const status = document.getElementById('filterStatus').value;
+                const fromDate = document.getElementById('filterFromDate').value;
+                const toDate = document.getElementById('filterToDate').value;
+                
+                let filtered = incidentsData;
+                
+                if (status) {
+                    filtered = filtered.filter(i => i.status === status);
+                }
+                
+                if (fromDate) {
+                    filtered = filtered.filter(i => new Date(i.detectionTime) >= new Date(fromDate));
+                }
+                
+                if (toDate) {
+                    const endDate = new Date(toDate);
+                    endDate.setHours(23, 59, 59, 999);
+                    filtered = filtered.filter(i => new Date(i.detectionTime) <= endDate);
+                }
+                
+                renderTable(filtered);
+                document.getElementById('totalCount').textContent = filtered.length;
+            }
+            
+            // Clear filter
+            function clearFilter() {
+                document.getElementById('filterForm').reset();
+                renderTable(incidentsData);
+                document.getElementById('totalCount').textContent = incidentsData.length;
+            }
+            
+            // Helper functions
+            function getStatusText(status) {
+                const texts = { 'DETECTED': 'Phát hiện', 'CONFIRMED': 'Đã xác nhận', 'RESOLVED': 'Đã xử lý' };
+                return texts[status] || status;
+            }
+            
+            function formatDateTime(dateStr) {
+                if (!dateStr) return '-';
+                return new Date(dateStr).toLocaleString('vi-VN');
+            }
+            
+            function calculateDuration(start, end) {
+                const diff = new Date(end) - new Date(start);
+                const hours = Math.floor(diff / 3600000);
+                const minutes = Math.floor((diff % 3600000) / 60000);
+                return `${hours}h ${minutes}m`;
+            }
+            
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            function openImageModal(url) {
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.9); display: flex;
+                    align-items: center; justify-content: center;
+                    z-index: 9999; cursor: pointer;
+                `;
+                const img = document.createElement('img');
+                img.src = url;
+                img.style.cssText = 'max-width: 90%; max-height: 90%; border-radius: 8px;';
+                modal.appendChild(img);
+                modal.onclick = () => modal.remove();
+                document.body.appendChild(modal);
+            }
+            
+            // Listen for WebSocket updates
+            window.addEventListener('incidentUpdate', function(e) {
+                loadIncidents();
+            });
+            
+            // Initialize
+            document.addEventListener('DOMContentLoaded', function() {
+                loadIncidents();
+            });
+        </script>
+    </th:block>
+</body>
+</html>

@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" 
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layouts/main}">
+<head>
+    <title>Chi tiết sự cố</title>
+    
+    <th:block layout:fragment="head">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <style>
+            #detailMap {
+                height: 350px;
+                border-radius: 8px;
+            }
+            
+            .incident-status-badge {
+                padding: 8px 16px;
+                border-radius: 20px;
+                font-size: 14px;
+                font-weight: 600;
+                text-transform: uppercase;
+            }
+            
+            .status-detected { background: #f8d7da; color: #721c24; }
+            .status-confirmed { background: #fff3cd; color: #856404; }
+            .status-resolved { background: #d4edda; color: #155724; }
+            
+            .timeline {
+                position: relative;
+                padding-left: 30px;
+            }
+            
+            .timeline::before {
+                content: '';
+                position: absolute;
+                left: 10px;
+                top: 0;
+                bottom: 0;
+                width: 2px;
+                background: #dee2e6;
+            }
+            
+            .timeline-item {
+                position: relative;
+                padding-bottom: 20px;
+            }
+            
+            .timeline-item::before {
+                content: '';
+                position: absolute;
+                left: -24px;
+                top: 5px;
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                background: #6c757d;
+                border: 2px solid #fff;
+            }
+            
+            .timeline-item.active::before {
+                background: #28a745;
+            }
+            
+            .timeline-item.pending::before {
+                background: #ffc107;
+            }
+            
+            .image-gallery {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 15px;
+            }
+            
+            .gallery-item {
+                position: relative;
+                border-radius: 8px;
+                overflow: hidden;
+                cursor: pointer;
+                aspect-ratio: 1;
+            }
+            
+            .gallery-item img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                transition: transform 0.3s ease;
+            }
+            
+            .gallery-item:hover img {
+                transform: scale(1.1);
+            }
+            
+            .gallery-item .overlay {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: linear-gradient(transparent, rgba(0,0,0,0.7));
+                color: white;
+                padding: 8px;
+                font-size: 11px;
+            }
+            
+            .lightbox {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.9);
+                z-index: 9999;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .lightbox.active {
+                display: flex;
+            }
+            
+            .lightbox img {
+                max-width: 90%;
+                max-height: 90%;
+                border-radius: 8px;
+            }
+            
+            .lightbox .close-btn {
+                position: absolute;
+                top: 20px;
+                right: 30px;
+                font-size: 30px;
+                color: white;
+                cursor: pointer;
+            }
+            
+            .action-card {
+                position: sticky;
+                top: 70px;
+            }
+            
+            .info-item {
+                display: flex;
+                align-items: flex-start;
+                margin-bottom: 15px;
+            }
+            
+            .info-item i {
+                width: 24px;
+                margin-right: 10px;
+                color: #6c757d;
+            }
+        </style>
+    </th:block>
+</head>
+
+<body>
+    <th:block layout:fragment="content-header">
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-2">
+                    <div class="col-sm-6">
+                        <h1 class="m-0">
+                            <i class="fas fa-file-alt text-info mr-2"></i>Chi tiết sự cố
+                            <span class="text-muted" id="incidentId"></span>
+                        </h1>
+                    </div>
+                    <div class="col-sm-6">
+                        <ol class="breadcrumb float-sm-right">
+                            <li class="breadcrumb-item"><a href="/dashboard">Home</a></li>
+                            <li class="breadcrumb-item"><a href="/incidents/list">Quản lý sự cố</a></li>
+                            <li class="breadcrumb-item active">Chi tiết</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+    <th:block layout:fragment="content">
+        <div id="loadingState" class="text-center py-5">
+            <i class="fas fa-spinner fa-spin fa-3x text-primary"></i>
+            <p class="mt-3">Đang tải thông tin...</p>
+        </div>
+        
+        <div id="incidentContent" style="display:none;">
+            <div class="row">
+                <div class="col-lg-8">
+                    <!-- Main Info Card -->
+                    <div class="card card-primary card-outline">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-info-circle mr-2"></i>Thông tin sự cố</h3>
+                            <div class="card-tools">
+                                <span class="incident-status-badge" id="statusBadge"></span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="info-item">
+                                <i class="fas fa-align-left"></i>
+                                <div>
+                                    <small class="text-muted d-block">Mô tả</small>
+                                    <strong id="description"></strong>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="info-item">
+                                        <i class="fas fa-map-marker-alt"></i>
+                                        <div>
+                                            <small class="text-muted d-block">Vị trí (Lat, Long)</small>
+                                            <strong><span id="coordinates"></span></strong>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="info-item">
+                                        <i class="fas fa-clock"></i>
+                                        <div>
+                                            <small class="text-muted d-block">Thời gian phát hiện</small>
+                                            <strong id="detectionTime"></strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="resolutionInfo" style="display:none;" class="info-item">
+                                <i class="fas fa-check-circle text-success"></i>
+                                <div>
+                                    <small class="text-muted d-block">Thời gian xử lý xong</small>
+                                    <strong id="resolutionTime"></strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Map Card -->
+                    <div class="card card-info card-outline">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-map mr-2"></i>Vị trí trên bản đồ</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="detailMap"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Images Card -->
+                    <div class="card card-warning card-outline">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-images mr-2"></i>Hình ảnh minh chứng</h3>
+                            <div class="card-tools">
+                                <span class="badge badge-warning" id="imageCount">0</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="image-gallery" id="imageGallery">
+                                <p class="text-muted">Không có hình ảnh</p>
+                            </div>
+                            
+                            <div id="uploadSection" style="display:none;" class="mt-3 pt-3 border-top">
+                                <form id="uploadForm" enctype="multipart/form-data">
+                                    <div class="input-group">
+                                        <div class="custom-file">
+                                            <input type="file" class="custom-file-input" id="newImage" accept="image/*">
+                                            <label class="custom-file-label" for="newImage">Chọn ảnh mới...</label>
+                                        </div>
+                                        <div class="input-group-append">
+                                            <button class="btn btn-warning" type="submit">
+                                                <i class="fas fa-upload mr-1"></i>Tải lên
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4">
+                    <!-- Actions Card -->
+                    <div class="card card-success card-outline action-card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-tasks mr-2"></i>Thao tác</h3>
+                        </div>
+                        <div class="card-body" id="actionsContainer">
+                            <!-- Actions will be rendered here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Timeline Card -->
+                    <div class="card card-secondary card-outline">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-history mr-2"></i>Lịch sử xử lý</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="timeline" id="timeline"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Lightbox -->
+        <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+            <span class="close-btn">&times;</span>
+            <img id="lightboxImage" src="">
+        </div>
+    </th:block>
+
+    <th:block layout:fragment="scripts">
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script>
+            let map, marker;
+            let incident = null;
+            const incidentId = window.location.pathname.split('/').pop();
+            
+            function loadIncident() {
+                fetch(`/api/incidents/${incidentId}`, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Not found');
+                    return response.json();
+                })
+                .then(data => {
+                    incident = data;
+                    renderIncident();
+                    document.getElementById('loadingState').style.display = 'none';
+                    document.getElementById('incidentContent').style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('loadingState').innerHTML = `
+                        <i class="fas fa-exclamation-triangle fa-3x text-danger"></i>
+                        <p class="mt-3">Không tìm thấy sự cố</p>
+                        <a href="/incidents/list" class="btn btn-primary">Quay lại danh sách</a>
+                    `;
+                });
+            }
+            
+            function renderIncident() {
+                document.getElementById('incidentId').textContent = '#' + incident.id;
+                document.getElementById('description').textContent = incident.description;
+                document.getElementById('coordinates').textContent = 
+                    `${incident.latitude.toFixed(6)}, ${incident.longitude.toFixed(6)}`;
+                document.getElementById('detectionTime').textContent = 
+                    new Date(incident.detectionTime).toLocaleString('vi-VN');
+                
+                // Status Badge
+                const statusBadge = document.getElementById('statusBadge');
+                const statusText = {
+                    'DETECTED': 'Mới phát hiện',
+                    'CONFIRMED': 'Đã xác nhận',
+                    'RESOLVED': 'Đã xử lý'
+                };
+                statusBadge.textContent = statusText[incident.status];
+                statusBadge.className = `incident-status-badge status-${incident.status.toLowerCase()}`;
+                
+                // Resolution Info
+                if (incident.resolutionTime) {
+                    document.getElementById('resolutionInfo').style.display = 'flex';
+                    document.getElementById('resolutionTime').textContent = 
+                        new Date(incident.resolutionTime).toLocaleString('vi-VN');
+                }
+                
+                // Initialize Map
+                initMap();
+                
+                // Render Images
+                renderImages();
+                
+                // Render Actions
+                renderActions();
+                
+                // Render Timeline
+                renderTimeline();
+                
+                // Show upload section if not resolved
+                if (incident.status !== 'RESOLVED') {
+                    document.getElementById('uploadSection').style.display = 'block';
+                }
+            }
+            
+            function initMap() {
+                map = L.map('detailMap').setView([incident.latitude, incident.longitude], 15);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap'
+                }).addTo(map);
+                
+                const icon = L.divIcon({
+                    html: `<i class="fas fa-exclamation-triangle text-danger fa-2x"></i>`,
+                    iconSize: [30, 30],
+                    className: ''
+                });
+                
+                marker = L.marker([incident.latitude, incident.longitude], { icon })
+                    .addTo(map)
+                    .bindPopup(`<strong>${incident.description}</strong>`)
+                    .openPopup();
+            }
+            
+            function renderImages() {
+                const gallery = document.getElementById('imageGallery');
+                const images = incident.images || [];
+                
+                document.getElementById('imageCount').textContent = images.length;
+                
+                if (images.length === 0) {
+                    gallery.innerHTML = '<p class="text-muted">Không có hình ảnh</p>';
+                    return;
+                }
+                
+                gallery.innerHTML = images.map((img, index) => `
+                    <div class="gallery-item" onclick="openLightbox('${img.filePath}')">
+                        <img src="/api/incidents/image/${img.filePath}" 
+                             onerror="this.src='https://via.placeholder.com/150?text=Error'"
+                             alt="Ảnh ${index + 1}">
+                        <div class="overlay">
+                            <i class="far fa-clock mr-1"></i>
+                            ${img.capturedAt ? new Date(img.capturedAt).toLocaleString('vi-VN') : 'N/A'}
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            function renderActions() {
+                const container = document.getElementById('actionsContainer');
+                let html = '';
+                
+                if (incident.status === 'DETECTED') {
+                    html += `
+                        <button class="btn btn-warning btn-lg btn-block mb-2" onclick="confirmIncident()">
+                            <i class="fas fa-check mr-2"></i>Xác nhận sự cố
+                        </button>
+                        <p class="text-muted small">Xác nhận sự cố dựa trên xem xét hình ảnh</p>
+                    `;
+                }
+                
+                if (incident.status !== 'RESOLVED') {
+                    html += `
+                        <button class="btn btn-success btn-lg btn-block mb-2" onclick="resolveIncident()">
+                            <i class="fas fa-check-double mr-2"></i>Đánh dấu đã xử lý
+                        </button>
+                        <p class="text-muted small">Kết thúc sự cố sau khi xử lý xong</p>
+                    `;
+                } else {
+                    html += `
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle mr-2"></i>
+                            Sự cố đã được xử lý hoàn tất
+                        </div>
+                    `;
+                }
+                
+                html += `
+                    <hr>
+                    <a href="/incidents/list" class="btn btn-secondary btn-block">
+                        <i class="fas fa-list mr-2"></i>Quay lại danh sách
+                    </a>
+                `;
+                
+                container.innerHTML = html;
+            }
+            
+            function renderTimeline() {
+                const timeline = document.getElementById('timeline');
+                
+                const items = [
+                    {
+                        title: 'Phát hiện sự cố',
+                        time: incident.detectionTime,
+                        status: 'active',
+                        icon: 'fas fa-exclamation-triangle text-danger'
+                    }
+                ];
+                
+                if (incident.status === 'CONFIRMED' || incident.status === 'RESOLVED') {
+                    items.push({
+                        title: 'Xác nhận sự cố',
+                        time: null, // We don't have confirmed_at field
+                        status: 'active',
+                        icon: 'fas fa-check text-warning'
+                    });
+                } else {
+                    items.push({
+                        title: 'Chờ xác nhận',
+                        time: null,
+                        status: 'pending',
+                        icon: 'fas fa-hourglass-half text-muted'
+                    });
+                }
+                
+                if (incident.status === 'RESOLVED') {
+                    items.push({
+                        title: 'Xử lý hoàn tất',
+                        time: incident.resolutionTime,
+                        status: 'active',
+                        icon: 'fas fa-check-double text-success'
+                    });
+                } else {
+                    items.push({
+                        title: 'Chờ xử lý',
+                        time: null,
+                        status: 'pending',
+                        icon: 'fas fa-hourglass-half text-muted'
+                    });
+                }
+                
+                timeline.innerHTML = items.map(item => `
+                    <div class="timeline-item ${item.status}">
+                        <h6 class="mb-1"><i class="${item.icon} mr-2"></i>${item.title}</h6>
+                        <small class="text-muted">
+                            ${item.time ? new Date(item.time).toLocaleString('vi-VN') : '---'}
+                        </small>
+                    </div>
+                `).join('');
+            }
+            
+            function confirmIncident() {
+                if (!confirm('Xác nhận sự cố này?')) return;
+                
+                fetch(`/api/incidents/${incidentId}/confirm`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    incident = data;
+                    renderIncident();
+                    showToast('Đã xác nhận sự cố!', 'success');
+                })
+                .catch(() => showToast('Lỗi xác nhận!', 'error'));
+            }
+            
+            function resolveIncident() {
+                if (!confirm('Đánh dấu sự cố đã xử lý xong?')) return;
+                
+                fetch(`/api/incidents/${incidentId}/resolve`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    incident = data;
+                    renderIncident();
+                    showToast('Đã xử lý xong!', 'success');
+                })
+                .catch(() => showToast('Lỗi xử lý!', 'error'));
+            }
+            
+            // Image Upload
+            document.getElementById('newImage').addEventListener('change', function() {
+                this.nextElementSibling.textContent = this.files[0]?.name || 'Chọn ảnh mới...';
+            });
+            
+            document.getElementById('uploadForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const fileInput = document.getElementById('newImage');
+                if (!fileInput.files[0]) {
+                    showToast('Vui lòng chọn ảnh!', 'warning');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('image', fileInput.files[0]);
+                
+                fetch(`/api/incidents/${incidentId}/images`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    incident = data;
+                    renderImages();
+                    fileInput.value = '';
+                    fileInput.nextElementSibling.textContent = 'Chọn ảnh mới...';
+                    showToast('Đã tải ảnh lên!', 'success');
+                })
+                .catch(() => showToast('Lỗi tải ảnh!', 'error'));
+            });
+            
+            // Lightbox
+            function openLightbox(filePath) {
+                document.getElementById('lightboxImage').src = '/api/incidents/image/' + filePath;
+                document.getElementById('lightbox').classList.add('active');
+            }
+            
+            function closeLightbox() {
+                document.getElementById('lightbox').classList.remove('active');
+            }
+            
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') closeLightbox();
+            });
+            
+            // Initialize
+            document.addEventListener('DOMContentLoaded', loadIncident);
+        </script>
+    </th:block>
+</body>
+</html>

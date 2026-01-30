@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" 
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layouts/main}">
+<head>
+    <title>Bản đồ sự cố</title>
+    
+    <th:block layout:fragment="head">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+        <style>
+            #fullMap {
+                height: calc(100vh - 200px);
+                min-height: 500px;
+                border-radius: 8px;
+            }
+            
+            .map-legend {
+                background: white;
+                padding: 15px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            
+            .legend-item {
+                display: flex;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+            
+            .legend-color {
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                margin-right: 10px;
+            }
+            
+            .legend-detected { background: #dc3545; }
+            .legend-confirmed { background: #ffc107; }
+            .legend-resolved { background: #28a745; }
+            
+            .filter-panel {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                z-index: 1000;
+                background: white;
+                padding: 15px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+                min-width: 200px;
+            }
+            
+            .incident-popup {
+                min-width: 250px;
+            }
+            
+            .incident-popup h5 {
+                margin-bottom: 10px;
+                font-size: 14px;
+            }
+            
+            .incident-popup .status-badge {
+                padding: 3px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            
+            .incident-popup img {
+                width: 100%;
+                height: 120px;
+                object-fit: cover;
+                border-radius: 4px;
+                margin: 8px 0;
+            }
+            
+            .map-stats {
+                position: absolute;
+                bottom: 10px;
+                left: 10px;
+                z-index: 1000;
+                background: white;
+                padding: 10px 15px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            }
+            
+            .map-stats span {
+                margin-right: 15px;
+            }
+        </style>
+    </th:block>
+</head>
+
+<body>
+    <th:block layout:fragment="content-header">
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-2">
+                    <div class="col-sm-6">
+                        <h1 class="m-0">
+                            <i class="fas fa-map-marked-alt text-success mr-2"></i>Bản đồ sự cố
+                        </h1>
+                    </div>
+                    <div class="col-sm-6">
+                        <ol class="breadcrumb float-sm-right">
+                            <li class="breadcrumb-item"><a href="/dashboard">Home</a></li>
+                            <li class="breadcrumb-item active">Bản đồ</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+    <th:block layout:fragment="content">
+        <div class="card">
+            <div class="card-body p-0" style="position: relative;">
+                <div id="fullMap"></div>
+                
+                <!-- Filter Panel -->
+                <div class="filter-panel">
+                    <h6 class="mb-3"><i class="fas fa-filter mr-2"></i>Bộ lọc</h6>
+                    <div class="custom-control custom-checkbox mb-2">
+                        <input type="checkbox" class="custom-control-input" id="filterDetected" checked onchange="applyFilters()">
+                        <label class="custom-control-label" for="filterDetected">
+                            <span class="legend-color legend-detected d-inline-block" style="width:12px;height:12px;"></span>
+                            Mới phát hiện
+                        </label>
+                    </div>
+                    <div class="custom-control custom-checkbox mb-2">
+                        <input type="checkbox" class="custom-control-input" id="filterConfirmed" checked onchange="applyFilters()">
+                        <label class="custom-control-label" for="filterConfirmed">
+                            <span class="legend-color legend-confirmed d-inline-block" style="width:12px;height:12px;"></span>
+                            Đang xử lý
+                        </label>
+                    </div>
+                    <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input" id="filterResolved" onchange="applyFilters()">
+                        <label class="custom-control-label" for="filterResolved">
+                            <span class="legend-color legend-resolved d-inline-block" style="width:12px;height:12px;"></span>
+                            Đã xử lý
+                        </label>
+                    </div>
+                    <hr>
+                    <button class="btn btn-outline-primary btn-sm btn-block" onclick="centerMap()">
+                        <i class="fas fa-compress-arrows-alt mr-1"></i>Fit tất cả
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm btn-block" onclick="loadIncidents()">
+                        <i class="fas fa-sync-alt mr-1"></i>Tải lại
+                    </button>
+                </div>
+                
+                <!-- Stats Bar -->
+                <div class="map-stats">
+                    <span><i class="fas fa-exclamation-circle text-danger mr-1"></i><strong id="statsDetected">0</strong></span>
+                    <span><i class="fas fa-spinner text-warning mr-1"></i><strong id="statsConfirmed">0</strong></span>
+                    <span><i class="fas fa-check-circle text-success mr-1"></i><strong id="statsResolved">0</strong></span>
+                    <span class="text-muted">|</span>
+                    <span><i class="fas fa-map-marker-alt mr-1"></i><strong id="statsTotal">0</strong> sự cố</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Legend Card -->
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="legend-item">
+                            <div class="legend-color legend-detected"></div>
+                            <div>
+                                <strong>Mới phát hiện</strong>
+                                <small class="d-block text-muted">Chờ xác nhận từ nhân viên</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="legend-item">
+                            <div class="legend-color legend-confirmed"></div>
+                            <div>
+                                <strong>Đang xử lý</strong>
+                                <small class="d-block text-muted">Đã xác nhận, đang xử lý</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="legend-item">
+                            <div class="legend-color legend-resolved"></div>
+                            <div>
+                                <strong>Đã xử lý</strong>
+                                <small class="d-block text-muted">Sự cố đã hoàn tất</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+    <th:block layout:fragment="scripts">
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+        <script>
+            let map, markerCluster;
+            let allIncidents = [];
+            let markers = {};
+            
+            const statusColors = {
+                'DETECTED': '#dc3545',
+                'CONFIRMED': '#ffc107',
+                'RESOLVED': '#28a745'
+            };
+            
+            const statusText = {
+                'DETECTED': 'Mới phát hiện',
+                'CONFIRMED': 'Đang xử lý',
+                'RESOLVED': 'Đã xử lý'
+            };
+            
+            function initMap() {
+                map = L.map('fullMap').setView([10.8231, 106.6297], 10);
+                
+                // Add base layers
+                const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap'
+                });
+                
+                const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    attribution: '&copy; Esri'
+                });
+                
+                osmLayer.addTo(map);
+                
+                // Layer control
+                L.control.layers({
+                    'OpenStreetMap': osmLayer,
+                    'Vệ tinh': satelliteLayer
+                }).addTo(map);
+                
+                // Marker cluster
+                markerCluster = L.markerClusterGroup({
+                    maxClusterRadius: 50,
+                    spiderfyOnMaxZoom: true,
+                    showCoverageOnHover: false,
+                    zoomToBoundsOnClick: true
+                });
+                
+                map.addLayer(markerCluster);
+                
+                loadIncidents();
+            }
+            
+            function loadIncidents() {
+                fetch('/api/incidents', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    allIncidents = data;
+                    applyFilters();
+                    updateStats();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Lỗi tải dữ liệu', 'error');
+                });
+            }
+            
+            function applyFilters() {
+                const showDetected = document.getElementById('filterDetected').checked;
+                const showConfirmed = document.getElementById('filterConfirmed').checked;
+                const showResolved = document.getElementById('filterResolved').checked;
+                
+                markerCluster.clearLayers();
+                markers = {};
+                
+                allIncidents.forEach(incident => {
+                    if (
+                        (incident.status === 'DETECTED' && showDetected) ||
+                        (incident.status === 'CONFIRMED' && showConfirmed) ||
+                        (incident.status === 'RESOLVED' && showResolved)
+                    ) {
+                        addMarker(incident);
+                    }
+                });
+            }
+            
+            function addMarker(incident) {
+                const color = statusColors[incident.status];
+                
+                const icon = L.divIcon({
+                    html: `<div style="
+                        background: ${color};
+                        width: 30px;
+                        height: 30px;
+                        border-radius: 50% 50% 50% 0;
+                        transform: rotate(-45deg);
+                        border: 2px solid white;
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                    "><i class="fas fa-car" style="
+                        color: white;
+                        font-size: 12px;
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%) rotate(45deg);
+                    "></i></div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 30],
+                    popupAnchor: [0, -30],
+                    className: ''
+                });
+                
+                const marker = L.marker([incident.latitude, incident.longitude], { icon });
+                
+                // Create popup content
+                const popupContent = createPopupContent(incident);
+                marker.bindPopup(popupContent, { maxWidth: 300 });
+                
+                markerCluster.addLayer(marker);
+                markers[incident.id] = marker;
+            }
+            
+            function createPopupContent(incident) {
+                const image = incident.images && incident.images.length > 0
+                    ? `<img src="/api/incidents/image/${incident.images[0].filePath}" 
+                            onerror="this.style.display='none'">`
+                    : '';
+                
+                return `
+                    <div class="incident-popup">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <span class="status-badge" style="background:${statusColors[incident.status]}20; color:${statusColors[incident.status]}">
+                                ${statusText[incident.status]}
+                            </span>
+                            <small class="text-muted">#${incident.id}</small>
+                        </div>
+                        <h5>${escapeHtml(incident.description)}</h5>
+                        ${image}
+                        <p class="mb-1 small">
+                            <i class="far fa-clock text-muted mr-1"></i>
+                            ${new Date(incident.detectionTime).toLocaleString('vi-VN')}
+                        </p>
+                        <p class="mb-2 small">
+                            <i class="fas fa-map-marker-alt text-muted mr-1"></i>
+                            ${incident.latitude.toFixed(4)}, ${incident.longitude.toFixed(4)}
+                        </p>
+                        <a href="/incidents/${incident.id}" class="btn btn-primary btn-sm btn-block">
+                            <i class="fas fa-eye mr-1"></i>Xem chi tiết
+                        </a>
+                    </div>
+                `;
+            }
+            
+            function updateStats() {
+                const detected = allIncidents.filter(i => i.status === 'DETECTED').length;
+                const confirmed = allIncidents.filter(i => i.status === 'CONFIRMED').length;
+                const resolved = allIncidents.filter(i => i.status === 'RESOLVED').length;
+                
+                document.getElementById('statsDetected').textContent = detected;
+                document.getElementById('statsConfirmed').textContent = confirmed;
+                document.getElementById('statsResolved').textContent = resolved;
+                document.getElementById('statsTotal').textContent = allIncidents.length;
+            }
+            
+            function centerMap() {
+                if (Object.keys(markers).length === 0) {
+                    showToast('Không có sự cố nào để hiển thị', 'info');
+                    return;
+                }
+                
+                const bounds = markerCluster.getBounds();
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                }
+            }
+            
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            // Listen for WebSocket updates
+            window.addEventListener('incidentUpdate', function() {
+                loadIncidents();
+            });
+            
+            // Initialize
+            document.addEventListener('DOMContentLoaded', initMap);
+        </script>
+    </th:block>
+</body>
+</html>

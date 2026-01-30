@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" 
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layouts/main}">
+<head>
+    <title>Tạo sự cố mới</title>
+    
+    <th:block layout:fragment="head">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <style>
+            #locationMap {
+                height: 400px;
+                border-radius: 8px;
+            }
+            
+            .form-section {
+                background: #f8f9fa;
+                padding: 20px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+            }
+            
+            .form-section-title {
+                font-weight: 600;
+                color: #495057;
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+                border-bottom: 2px solid #dee2e6;
+            }
+            
+            .image-preview-container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            
+            .image-preview {
+                position: relative;
+                width: 120px;
+                height: 120px;
+                border-radius: 8px;
+                overflow: hidden;
+            }
+            
+            .image-preview img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            
+            .image-preview .remove-btn {
+                position: absolute;
+                top: 5px;
+                right: 5px;
+                background: rgba(220,53,69,0.9);
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 24px;
+                height: 24px;
+                cursor: pointer;
+            }
+            
+            .upload-zone {
+                border: 2px dashed #dee2e6;
+                border-radius: 8px;
+                padding: 40px 20px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            
+            .upload-zone:hover, .upload-zone.dragover {
+                border-color: #007bff;
+                background: rgba(0,123,255,0.05);
+            }
+            
+            .upload-zone i {
+                font-size: 48px;
+                color: #6c757d;
+                margin-bottom: 15px;
+            }
+            
+            .location-search {
+                position: relative;
+            }
+            
+            .location-search input {
+                padding-right: 40px;
+            }
+            
+            .location-search .search-btn {
+                position: absolute;
+                right: 10px;
+                top: 50%;
+                transform: translateY(-50%);
+                border: none;
+                background: none;
+                color: #6c757d;
+            }
+        </style>
+    </th:block>
+</head>
+
+<body>
+    <th:block layout:fragment="content-header">
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-2">
+                    <div class="col-sm-6">
+                        <h1 class="m-0">
+                            <i class="fas fa-plus-circle text-primary mr-2"></i>Báo cáo sự cố mới
+                        </h1>
+                    </div>
+                    <div class="col-sm-6">
+                        <ol class="breadcrumb float-sm-right">
+                            <li class="breadcrumb-item"><a href="/dashboard">Home</a></li>
+                            <li class="breadcrumb-item"><a href="/incidents/list">Quản lý sự cố</a></li>
+                            <li class="breadcrumb-item active">Tạo mới</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+    <th:block layout:fragment="content">
+        <form id="incidentForm" enctype="multipart/form-data">
+            <div class="row">
+                <div class="col-md-8">
+                    <!-- Basic Information -->
+                    <div class="card card-primary card-outline">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-info-circle mr-2"></i>Thông tin sự cố</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="description">Mô tả sự cố <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="description" name="description" rows="3" 
+                                          placeholder="Mô tả chi tiết tình huống xe dừng khẩn cấp..." required></textarea>
+                                <small class="text-muted">VD: Xe tải đang dừng ở làn khẩn cấp, có khói bốc ra từ động cơ</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Loại phương tiện</label>
+                                <select class="form-control" id="vehicleType">
+                                    <option value="">-- Chọn loại phương tiện --</option>
+                                    <option value="xe_con">Xe con</option>
+                                    <option value="xe_khach">Xe khách</option>
+                                    <option value="xe_tai">Xe tải</option>
+                                    <option value="xe_container">Xe container</option>
+                                    <option value="xe_may">Xe máy</option>
+                                    <option value="khac">Khác</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Mức độ nghiêm trọng</label>
+                                <div class="btn-group btn-group-toggle w-100" data-toggle="buttons">
+                                    <label class="btn btn-outline-success">
+                                        <input type="radio" name="severity" value="low"> Thấp
+                                    </label>
+                                    <label class="btn btn-outline-warning active">
+                                        <input type="radio" name="severity" value="medium" checked> Trung bình
+                                    </label>
+                                    <label class="btn btn-outline-danger">
+                                        <input type="radio" name="severity" value="high"> Cao
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Location Section -->
+                    <div class="card card-info card-outline">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-map-marker-alt mr-2"></i>Vị trí sự cố</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                Click vào bản đồ để chọn vị trí sự cố hoặc nhập tọa độ thủ công
+                            </div>
+                            
+                            <div id="locationMap" class="mb-3"></div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="latitude">Vĩ độ (Latitude) <span class="text-danger">*</span></label>
+                                        <input type="number" step="any" class="form-control" id="latitude" name="latitude" 
+                                               placeholder="VD: 10.8231" required min="-90" max="90">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="longitude">Kinh độ (Longitude) <span class="text-danger">*</span></label>
+                                        <input type="number" step="any" class="form-control" id="longitude" name="longitude" 
+                                               placeholder="VD: 106.6297" required min="-180" max="180">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="button" class="btn btn-outline-secondary btn-block" onclick="getCurrentLocation()">
+                                <i class="fas fa-crosshairs mr-2"></i>Sử dụng vị trí hiện tại
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <!-- Image Upload -->
+                    <div class="card card-warning card-outline">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-camera mr-2"></i>Hình ảnh minh chứng</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="upload-zone" id="uploadZone" onclick="document.getElementById('imageInput').click()">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p class="mb-1">Kéo thả ảnh vào đây</p>
+                                <p class="text-muted small mb-0">hoặc click để chọn file</p>
+                            </div>
+                            
+                            <input type="file" id="imageInput" name="images" accept="image/*" multiple hidden>
+                            
+                            <div class="image-preview-container mt-3" id="imagePreviewContainer"></div>
+                            
+                            <small class="text-muted d-block mt-3">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Chấp nhận: JPEG, PNG, GIF, WebP (tối đa 5MB/ảnh)
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Actions -->
+                    <div class="card card-success card-outline">
+                        <div class="card-body">
+                            <button type="submit" class="btn btn-success btn-lg btn-block mb-2" id="submitBtn">
+                                <i class="fas fa-paper-plane mr-2"></i>Gửi báo cáo
+                            </button>
+                            <a href="/incidents/list" class="btn btn-secondary btn-block">
+                                <i class="fas fa-times mr-2"></i>Hủy bỏ
+                            </a>
+                        </div>
+                        <div class="card-footer">
+                            <small class="text-muted">
+                                <i class="fas fa-clock mr-1"></i>
+                                Sự cố sẽ được ghi nhận với trạng thái "Mới phát hiện"
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </th:block>
+
+    <th:block layout:fragment="scripts">
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script>
+            let map, marker;
+            let selectedFiles = [];
+            
+            // Initialize Map
+            function initMap() {
+                map = L.map('locationMap').setView([10.8231, 106.6297], 10);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap'
+                }).addTo(map);
+                
+                map.on('click', function(e) {
+                    setLocation(e.latlng.lat, e.latlng.lng);
+                });
+            }
+            
+            function setLocation(lat, lng) {
+                document.getElementById('latitude').value = lat.toFixed(6);
+                document.getElementById('longitude').value = lng.toFixed(6);
+                
+                if (marker) {
+                    marker.setLatLng([lat, lng]);
+                } else {
+                    marker = L.marker([lat, lng], {
+                        icon: L.divIcon({
+                            html: '<i class="fas fa-exclamation-triangle text-danger fa-2x"></i>',
+                            iconSize: [30, 30],
+                            className: ''
+                        })
+                    }).addTo(map);
+                }
+                
+                map.setView([lat, lng], 15);
+            }
+            
+            function getCurrentLocation() {
+                if (!navigator.geolocation) {
+                    showToast('Trình duyệt không hỗ trợ định vị', 'error');
+                    return;
+                }
+                
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        setLocation(position.coords.latitude, position.coords.longitude);
+                        showToast('Đã lấy vị trí hiện tại!', 'success');
+                    },
+                    function(error) {
+                        showToast('Không thể lấy vị trí: ' + error.message, 'error');
+                    }
+                );
+            }
+            
+            // Image Upload Handling
+            const uploadZone = document.getElementById('uploadZone');
+            const imageInput = document.getElementById('imageInput');
+            const previewContainer = document.getElementById('imagePreviewContainer');
+            
+            uploadZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadZone.classList.add('dragover');
+            });
+            
+            uploadZone.addEventListener('dragleave', function() {
+                uploadZone.classList.remove('dragover');
+            });
+            
+            uploadZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadZone.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+            
+            imageInput.addEventListener('change', function() {
+                handleFiles(this.files);
+            });
+            
+            function handleFiles(files) {
+                Array.from(files).forEach(file => {
+                    if (!file.type.startsWith('image/')) {
+                        showToast('Chỉ chấp nhận file ảnh!', 'warning');
+                        return;
+                    }
+                    
+                    if (file.size > 5 * 1024 * 1024) {
+                        showToast('File ' + file.name + ' vượt quá 5MB!', 'warning');
+                        return;
+                    }
+                    
+                    selectedFiles.push(file);
+                    showImagePreview(file);
+                });
+            }
+            
+            function showImagePreview(file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const div = document.createElement('div');
+                    div.className = 'image-preview';
+                    div.innerHTML = `
+                        <img src="${e.target.result}" alt="Preview">
+                        <button type="button" class="remove-btn" onclick="removeImage(this, '${file.name}')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    previewContainer.appendChild(div);
+                };
+                reader.readAsDataURL(file);
+            }
+            
+            function removeImage(btn, fileName) {
+                selectedFiles = selectedFiles.filter(f => f.name !== fileName);
+                btn.parentElement.remove();
+            }
+            
+            // Form Submission
+            document.getElementById('incidentForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const latitude = document.getElementById('latitude').value;
+                const longitude = document.getElementById('longitude').value;
+                const description = document.getElementById('description').value;
+                
+                if (!latitude || !longitude) {
+                    showToast('Vui lòng chọn vị trí trên bản đồ!', 'warning');
+                    return;
+                }
+                
+                if (!description.trim()) {
+                    showToast('Vui lòng nhập mô tả sự cố!', 'warning');
+                    return;
+                }
+                
+                const submitBtn = document.getElementById('submitBtn');
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Đang gửi...';
+                
+                const formData = new FormData();
+                formData.append('latitude', latitude);
+                formData.append('longitude', longitude);
+                formData.append('description', description);
+                
+                // Add first image if exists
+                if (selectedFiles.length > 0) {
+                    formData.append('image', selectedFiles[0]);
+                }
+                
+                fetch('/api/incidents', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.json();
+                })
+                .then(data => {
+                    // Upload additional images
+                    if (selectedFiles.length > 1) {
+                        const additionalUploads = selectedFiles.slice(1).map(file => {
+                            const imgFormData = new FormData();
+                            imgFormData.append('image', file);
+                            return fetch(`/api/incidents/${data.id}/images`, {
+                                method: 'POST',
+                                headers: { 'Authorization': 'Bearer ' + token },
+                                body: imgFormData
+                            });
+                        });
+                        return Promise.all(additionalUploads).then(() => data);
+                    }
+                    return data;
+                })
+                .then(data => {
+                    showToast('Đã tạo sự cố thành công!', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/incidents/' + data.id;
+                    }, 1500);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Lỗi khi tạo sự cố!', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Gửi báo cáo';
+                });
+            });
+            
+            // Initialize
+            document.addEventListener('DOMContentLoaded', initMap);
+        </script>
+    </th:block>
+</body>
+</html>

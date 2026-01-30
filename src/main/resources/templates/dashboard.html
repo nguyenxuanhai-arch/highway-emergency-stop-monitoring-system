@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" 
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layouts/main}">
+<head>
+    <title>Dashboard</title>
+    
+    <th:block layout:fragment="head">
+        <!-- Leaflet CSS for Map -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+        
+        <style>
+            /* Dashboard specific styles */
+            .small-box {
+                border-radius: 0.5rem;
+                box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+            }
+            
+            .small-box .icon {
+                font-size: 70px;
+                top: 10px;
+            }
+            
+            #map {
+                height: 500px;
+                width: 100%;
+                border-radius: 0.5rem;
+            }
+            
+            .incident-marker {
+                background: transparent;
+                border: none;
+            }
+            
+            .incidents-list-container {
+                max-height: 600px;
+                overflow-y: auto;
+            }
+            
+            .incident-item {
+                padding: 12px 15px;
+                border-bottom: 1px solid #f3f4f6;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .incident-item:hover {
+                background: #f8f9fa;
+            }
+
+            .incident-item.selected {
+                background: #e3f2fd;
+                border-left: 3px solid #007bff;
+            }
+
+            .incident-status {
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 600;
+                text-transform: uppercase;
+                min-width: 80px;
+                text-align: center;
+            }
+
+            .status-detected {
+                background: #f8d7da;
+                color: #721c24;
+            }
+
+            .status-confirmed {
+                background: #fff3cd;
+                color: #856404;
+            }
+
+            .status-resolved {
+                background: #d4edda;
+                color: #155724;
+            }
+
+            .incident-info {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .incident-info .id {
+                font-size: 12px;
+                color: #6c757d;
+            }
+
+            .incident-info .desc {
+                font-size: 13px;
+                color: #212529;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            
+            .image-thumbnail {
+                width: 100%;
+                height: 100px;
+                border-radius: 4px;
+                overflow: hidden;
+                background: #f3f4f6;
+                cursor: pointer;
+                transition: transform 0.2s ease;
+            }
+
+            .image-thumbnail:hover {
+                transform: scale(1.02);
+            }
+
+            .image-thumbnail img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            
+            .incident-detail-panel {
+                position: fixed;
+                right: -400px;
+                top: 57px;
+                width: 400px;
+                height: calc(100vh - 57px);
+                background: white;
+                box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+                z-index: 1020;
+                transition: right 0.3s ease;
+                overflow-y: auto;
+            }
+            
+            .incident-detail-panel.active {
+                right: 0;
+            }
+            
+            .incident-detail-header {
+                padding: 15px;
+                border-bottom: 1px solid #dee2e6;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                position: sticky;
+                top: 0;
+                background: white;
+                z-index: 10;
+            }
+            
+            .incident-detail-body {
+                padding: 15px;
+            }
+            
+            .close-panel-btn {
+                background: none;
+                border: none;
+                font-size: 24px;
+                cursor: pointer;
+                color: #6c757d;
+            }
+            
+            .close-panel-btn:hover {
+                color: #343a40;
+            }
+        </style>
+    </th:block>
+</head>
+
+<body>
+    <!-- Content Header -->
+    <th:block layout:fragment="content-header">
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-2">
+                    <div class="col-sm-6">
+                        <h1 class="m-0">
+                            <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                        </h1>
+                    </div>
+                    <div class="col-sm-6">
+                        <ol class="breadcrumb float-sm-right">
+                            <li class="breadcrumb-item"><a href="/dashboard">Home</a></li>
+                            <li class="breadcrumb-item active">Dashboard</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+    <!-- Main Content -->
+    <th:block layout:fragment="content">
+        <!-- Statistics Cards Row -->
+        <div class="row">
+            <!-- Total Incidents Card -->
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3 id="statTotal">0</h3>
+                        <p>Tổng sự cố</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-clipboard-list"></i>
+                    </div>
+                    <a href="/incidents/list" class="small-box-footer">
+                        Xem chi tiết <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Detected Card -->
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-danger">
+                    <div class="inner">
+                        <h3 id="statDetected">0</h3>
+                        <p>Phát hiện mới</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <a href="/incidents/active" class="small-box-footer">
+                        Xem chi tiết <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Confirmed Card -->
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3 id="statConfirmed">0</h3>
+                        <p>Đang xử lý</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-spinner"></i>
+                    </div>
+                    <a href="/incidents/active" class="small-box-footer">
+                        Xem chi tiết <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Resolved Card -->
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3 id="statResolved">0</h3>
+                        <p>Đã xử lý</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <a href="/reports/statistics" class="small-box-footer">
+                        Xem báo cáo <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        <!-- /.row -->
+
+        <!-- Main Row: Map and Incidents -->
+        <div class="row">
+            <!-- Map Column -->
+            <div class="col-lg-8">
+                <div class="card card-primary card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-map-marked-alt mr-2"></i>Bản đồ sự cố
+                        </h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" onclick="centerMapDefault()">
+                                <i class="fas fa-crosshairs"></i> Về vị trí mặc định
+                            </button>
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="map"></div>
+                    </div>
+                </div>
+                
+                <!-- Create Incident Card -->
+                <div class="card card-success card-outline collapsed-card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-plus-circle mr-2"></i>Báo cáo sự cố mới
+                        </h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body" style="display: none;">
+                        <form id="createIncidentForm" enctype="multipart/form-data">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="latitude">Vĩ độ (Latitude) <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <div class="input-group-prepend">
+                                                <span class="input-group-text"><i class="fas fa-map-marker-alt"></i></span>
+                                            </div>
+                                            <input type="number" class="form-control" id="latitude" name="latitude" 
+                                                   step="0.000001" min="-90" max="90" placeholder="VD: 10.7769" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="longitude">Kinh độ (Longitude) <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <div class="input-group-prepend">
+                                                <span class="input-group-text"><i class="fas fa-globe"></i></span>
+                                            </div>
+                                            <input type="number" class="form-control" id="longitude" name="longitude" 
+                                                   step="0.000001" min="-180" max="180" placeholder="VD: 106.7009" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="description">Mô tả sự cố <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="description" name="description" rows="3" 
+                                          placeholder="Mô tả chi tiết sự cố..." required></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="imageFile">Hình ảnh minh chứng <span class="text-danger">*</span></label>
+                                <div class="custom-file">
+                                    <input type="file" class="custom-file-input" id="imageFile" name="imageFile" 
+                                           accept="image/jpeg,image/png,image/gif,image/webp" required>
+                                    <label class="custom-file-label" for="imageFile">Chọn file ảnh...</label>
+                                </div>
+                                <small class="form-text text-muted">Chấp nhận: JPEG, PNG, GIF, WebP (tối đa 5MB)</small>
+                            </div>
+                            
+                            <div id="imagePreview" class="mb-3" style="display:none;">
+                                <img id="previewImg" src="" alt="Preview" class="img-thumbnail" style="max-height: 150px;">
+                            </div>
+                            
+                            <div class="form-group">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="getCurrentLocation()">
+                                    <i class="fas fa-crosshairs"></i> Lấy vị trí GPS
+                                </button>
+                                <button type="button" class="btn btn-outline-info btn-sm" onclick="pickFromMap()">
+                                    <i class="fas fa-map"></i> Chọn từ bản đồ
+                                </button>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-success btn-block" id="submitBtn">
+                                <i class="fas fa-paper-plane mr-2"></i>Gửi báo cáo
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Incidents List Column -->
+            <div class="col-lg-4">
+                <div class="card card-warning card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-list mr-2"></i>Sự cố đang hoạt động
+                        </h3>
+                        <div class="card-tools">
+                            <span class="badge badge-danger" id="incidentCount">0</span>
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0 incidents-list-container">
+                        <div id="incidentsList">
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-3x mb-3"></i>
+                                <p>Không có sự cố nào</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Quick Stats Card -->
+                <div class="card card-info card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-chart-bar mr-2"></i>Thống kê nhanh
+                        </h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i class="fas fa-clock text-info mr-2"></i>Thời gian xử lý TB</span>
+                                <span class="badge badge-info badge-pill" id="avgResponseTime">--</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i class="fas fa-calendar-day text-primary mr-2"></i>Sự cố hôm nay</span>
+                                <span class="badge badge-primary badge-pill" id="todayIncidents">0</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i class="fas fa-calendar-week text-secondary mr-2"></i>Sự cố tuần này</span>
+                                <span class="badge badge-secondary badge-pill" id="weekIncidents">0</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- /.row -->
+        
+        <!-- Incident Detail Panel (Slide-in) -->
+        <div class="incident-detail-panel" id="incidentDetailPanel">
+            <div class="incident-detail-header">
+                <h5 class="mb-0"><i class="fas fa-info-circle mr-2"></i>Chi tiết sự cố</h5>
+                <button class="close-panel-btn" onclick="closeDetailPanel()">&times;</button>
+            </div>
+            <div class="incident-detail-body" id="incidentDetailBody">
+                <!-- Content loaded dynamically -->
+            </div>
+        </div>
+    </th:block>
+
+    <!-- Page Scripts -->
+    <th:block layout:fragment="scripts">
+        <!-- Leaflet JS -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+        
+        <script>
+            // Dashboard-specific variables
+            let map;
+            let markers = {};
+            let incidents = {};
+            let selectedIncidentId = null;
+            let isPickingFromMap = false;
+
+            // Initialize map
+            function initMap() {
+                map = L.map('map').setView([10.7769, 106.7009], 10);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap contributors',
+                    maxZoom: 19
+                }).addTo(map);
+                
+                // Fix map display issues when in collapsed card
+                setTimeout(() => map.invalidateSize(), 100);
+            }
+
+            // Center map to default position
+            function centerMapDefault() {
+                map.setView([10.7769, 106.7009], 10);
+            }
+
+            // Load incidents from API
+            function loadIncidents() {
+                fetch('/api/incidents', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Incidents loaded:', data);
+                    
+                    // Clear existing
+                    document.getElementById('incidentsList').innerHTML = '';
+                    Object.values(markers).forEach(m => map.removeLayer(m));
+                    markers = {};
+                    incidents = {};
+                    
+                    if (Array.isArray(data) && data.length > 0) {
+                        data.forEach(incident => {
+                            incidents[incident.id] = incident;
+                            addIncidentToMap(incident);
+                            addIncidentToList(incident);
+                        });
+                    } else {
+                        document.getElementById('incidentsList').innerHTML = `
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-3x mb-3"></i>
+                                <p>Không có sự cố nào</p>
+                            </div>
+                        `;
+                    }
+                    
+                    updateStatistics();
+                })
+                .catch(error => {
+                    console.error('Error loading incidents:', error);
+                    showToast('Không thể tải danh sách sự cố: ' + error.message, 'error');
+                });
+            }
+
+            // Add incident to map
+            function addIncidentToMap(incident) {
+                if (markers[incident.id]) {
+                    map.removeLayer(markers[incident.id]);
+                }
+
+                const icon = getIncidentIcon(incident.status);
+                const marker = L.marker([incident.latitude, incident.longitude], { icon }).addTo(map);
+                
+                marker.bindPopup(`
+                    <div style="min-width: 200px;">
+                        <strong>Sự cố #${incident.id}</strong><br>
+                        <span class="text-muted">${incident.description}</span><br>
+                        <small class="text-muted">
+                            <i class="far fa-clock"></i> ${new Date(incident.detectionTime).toLocaleString('vi-VN')}
+                        </small>
+                        <hr class="my-2">
+                        <button class="btn btn-sm btn-primary btn-block" onclick="selectIncident(${incident.id})">
+                            Xem chi tiết
+                        </button>
+                    </div>
+                `);
+
+                marker.on('click', () => selectIncident(incident.id));
+                markers[incident.id] = marker;
+            }
+
+            // Get marker icon based on status
+            function getIncidentIcon(status) {
+                const colors = {
+                    'DETECTED': '#dc3545',
+                    'CONFIRMED': '#ffc107',
+                    'RESOLVED': '#28a745'
+                };
+                
+                const icons = {
+                    'DETECTED': 'fa-exclamation-circle',
+                    'CONFIRMED': 'fa-check-circle',
+                    'RESOLVED': 'fa-check-double'
+                };
+
+                return L.divIcon({
+                    html: `<i class="fas ${icons[status]}" style="color: ${colors[status]}; font-size: 24px; text-shadow: 0 0 3px white;"></i>`,
+                    iconSize: [30, 30],
+                    className: 'incident-marker',
+                    popupAnchor: [0, -15]
+                });
+            }
+
+            // Add incident to list
+            function addIncidentToList(incident) {
+                const list = document.getElementById('incidentsList');
+                
+                // Remove "no incidents" message if exists
+                const emptyMsg = list.querySelector('.text-center.text-muted');
+                if (emptyMsg) emptyMsg.remove();
+                
+                let item = document.getElementById(`incident-${incident.id}`);
+                
+                if (!item) {
+                    item = document.createElement('div');
+                    item.id = `incident-${incident.id}`;
+                    list.insertBefore(item, list.firstChild);
+                }
+
+                const statusClass = `status-${incident.status.toLowerCase()}`;
+                item.className = `incident-item ${selectedIncidentId === incident.id ? 'selected' : ''}`;
+                item.innerHTML = `
+                    <span class="incident-status ${statusClass}">${getStatusText(incident.status)}</span>
+                    <div class="incident-info">
+                        <div class="id">#${incident.id} - ${new Date(incident.detectionTime).toLocaleString('vi-VN')}</div>
+                        <div class="desc">${incident.description}</div>
+                    </div>
+                `;
+                
+                item.onclick = () => selectIncident(incident.id);
+            }
+            
+            // Get Vietnamese status text
+            function getStatusText(status) {
+                const texts = {
+                    'DETECTED': 'Phát hiện',
+                    'CONFIRMED': 'Đã xác nhận',
+                    'RESOLVED': 'Đã xử lý'
+                };
+                return texts[status] || status;
+            }
+
+            // Select and show incident detail
+            function selectIncident(incidentId) {
+                selectedIncidentId = incidentId;
+                
+                // Update list selection
+                document.querySelectorAll('.incident-item').forEach(el => el.classList.remove('selected'));
+                const selectedItem = document.getElementById(`incident-${incidentId}`);
+                if (selectedItem) selectedItem.classList.add('selected');
+
+                // Show detail panel
+                showIncidentDetail(incidentId);
+
+                // Center map
+                const incident = incidents[incidentId];
+                if (incident) {
+                    map.setView([incident.latitude, incident.longitude], 14);
+                    if (markers[incidentId]) {
+                        markers[incidentId].openPopup();
+                    }
+                }
+            }
+
+            // Show incident detail in panel
+            function showIncidentDetail(incidentId) {
+                const incident = incidents[incidentId];
+                if (!incident) return;
+
+                const panel = document.getElementById('incidentDetailPanel');
+                const body = document.getElementById('incidentDetailBody');
+                
+                const statusClass = `status-${incident.status.toLowerCase()}`;
+                
+                let imagesHtml = '<p class="text-muted">Không có hình ảnh</p>';
+                if (incident.images && incident.images.length > 0) {
+                    imagesHtml = `
+                        <div class="row">
+                            ${incident.images.map(img => `
+                                <div class="col-6 mb-2">
+                                    <div class="image-thumbnail" onclick="openImageModal('/api/incidents/image/${img.filePath}')">
+                                        <img src="/api/incidents/image/${img.filePath}" alt="Incident image" 
+                                             onerror="this.src='https://via.placeholder.com/200?text=No+Image'">
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+
+                body.innerHTML = `
+                    <div class="mb-3">
+                        <span class="incident-status ${statusClass} mr-2">${getStatusText(incident.status)}</span>
+                        <span class="text-muted">Sự cố #${incident.id}</span>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong><i class="fas fa-align-left mr-2"></i>Mô tả:</strong>
+                        <p class="mb-0 mt-1">${incident.description}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong><i class="fas fa-map-marker-alt mr-2"></i>Vị trí:</strong>
+                        <p class="mb-0 mt-1">${incident.latitude.toFixed(6)}, ${incident.longitude.toFixed(6)}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong><i class="fas fa-clock mr-2"></i>Thời gian phát hiện:</strong>
+                        <p class="mb-0 mt-1">${new Date(incident.detectionTime).toLocaleString('vi-VN')}</p>
+                    </div>
+                    
+                    ${incident.resolutionTime ? `
+                    <div class="mb-3">
+                        <strong><i class="fas fa-check-circle mr-2"></i>Thời gian xử lý xong:</strong>
+                        <p class="mb-0 mt-1">${new Date(incident.resolutionTime).toLocaleString('vi-VN')}</p>
+                    </div>
+                    ` : ''}
+                    
+                    <div class="mb-3">
+                        <strong><i class="fas fa-images mr-2"></i>Hình ảnh minh chứng (${incident.images?.length || 0}):</strong>
+                        <div class="mt-2">${imagesHtml}</div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="btn-group-vertical w-100">
+                        ${incident.status === 'DETECTED' ? `
+                            <button class="btn btn-warning btn-block mb-2" onclick="confirmIncident(${incidentId})">
+                                <i class="fas fa-check mr-2"></i>Xác nhận sự cố
+                            </button>
+                        ` : ''}
+                        
+                        ${incident.status !== 'RESOLVED' ? `
+                            <button class="btn btn-success btn-block mb-2" onclick="resolveIncident(${incidentId})">
+                                <i class="fas fa-check-double mr-2"></i>Đánh dấu đã xử lý
+                            </button>
+                            <button class="btn btn-outline-primary btn-block" onclick="openAddImageModal(${incidentId})">
+                                <i class="fas fa-camera mr-2"></i>Thêm hình ảnh
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+                
+                panel.classList.add('active');
+            }
+
+            // Close detail panel
+            function closeDetailPanel() {
+                document.getElementById('incidentDetailPanel').classList.remove('active');
+                selectedIncidentId = null;
+                document.querySelectorAll('.incident-item').forEach(el => el.classList.remove('selected'));
+            }
+
+            // Confirm incident
+            function confirmIncident(incidentId) {
+                if (!confirm('Xác nhận sự cố này?')) return;
+                
+                fetch(`/api/incidents/${incidentId}/confirm`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to confirm');
+                    return response.json();
+                })
+                .then(data => {
+                    incidents[incidentId] = data;
+                    addIncidentToMap(data);
+                    addIncidentToList(data);
+                    showIncidentDetail(incidentId);
+                    showToast('Đã xác nhận sự cố thành công!', 'success');
+                    updateStatistics();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Lỗi xác nhận sự cố!', 'error');
+                });
+            }
+
+            // Resolve incident
+            function resolveIncident(incidentId) {
+                if (!confirm('Đánh dấu sự cố này đã được xử lý?')) return;
+                
+                fetch(`/api/incidents/${incidentId}/resolve`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to resolve');
+                    return response.json();
+                })
+                .then(data => {
+                    incidents[incidentId] = data;
+                    addIncidentToMap(data);
+                    addIncidentToList(data);
+                    showIncidentDetail(incidentId);
+                    showToast('Đã xử lý sự cố thành công!', 'success');
+                    updateStatistics();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Lỗi xử lý sự cố!', 'error');
+                });
+            }
+
+            // Update statistics
+            function updateStatistics() {
+                const stats = { DETECTED: 0, CONFIRMED: 0, RESOLVED: 0 };
+                let total = 0;
+                
+                Object.values(incidents).forEach(incident => {
+                    stats[incident.status]++;
+                    total++;
+                });
+
+                document.getElementById('incidentCount').textContent = stats.DETECTED + stats.CONFIRMED;
+                document.getElementById('statTotal').textContent = total;
+                document.getElementById('statDetected').textContent = stats.DETECTED;
+                document.getElementById('statConfirmed').textContent = stats.CONFIRMED;
+                document.getElementById('statResolved').textContent = stats.RESOLVED;
+            }
+
+            // Open image in modal
+            function openImageModal(imageUrl) {
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.9); display: flex;
+                    align-items: center; justify-content: center;
+                    z-index: 9999; cursor: pointer;
+                `;
+                
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.style.cssText = 'max-width: 90%; max-height: 90%; border-radius: 8px;';
+                
+                modal.appendChild(img);
+                modal.onclick = () => modal.remove();
+                document.body.appendChild(modal);
+            }
+
+            // ===================== CREATE INCIDENT FORM =====================
+            
+            function initCreateIncidentForm() {
+                const form = document.getElementById('createIncidentForm');
+                const imageInput = document.getElementById('imageFile');
+                
+                // Update file label on change
+                imageInput.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    const label = document.querySelector('.custom-file-label');
+                    
+                    if (file) {
+                        label.textContent = file.name;
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            document.getElementById('previewImg').src = e.target.result;
+                            document.getElementById('imagePreview').style.display = 'block';
+                        };
+                        reader.readAsDataURL(file);
+                    } else {
+                        label.textContent = 'Chọn file ảnh...';
+                        document.getElementById('imagePreview').style.display = 'none';
+                    }
+                });
+                
+                // Form submit
+                form.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    const submitBtn = document.getElementById('submitBtn');
+                    const originalText = submitBtn.innerHTML;
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Đang gửi...';
+                    
+                    try {
+                        const formData = new FormData();
+                        formData.append('latitude', document.getElementById('latitude').value);
+                        formData.append('longitude', document.getElementById('longitude').value);
+                        formData.append('description', document.getElementById('description').value);
+                        formData.append('imageFile', document.getElementById('imageFile').files[0]);
+                        
+                        const response = await fetch('/api/incidents', {
+                            method: 'POST',
+                            headers: { 'Authorization': 'Bearer ' + token },
+                            body: formData
+                        });
+                        
+                        if (!response.ok) {
+                            const error = await response.text();
+                            throw new Error(error || `HTTP ${response.status}`);
+                        }
+                        
+                        const result = await response.json();
+                        console.log('Incident created:', result);
+                        
+                        showToast('Sự cố đã được báo cáo thành công!', 'success');
+                        form.reset();
+                        document.getElementById('imagePreview').style.display = 'none';
+                        document.querySelector('.custom-file-label').textContent = 'Chọn file ảnh...';
+                        
+                        // Add to local data immediately
+                        incidents[result.id] = result;
+                        addIncidentToMap(result);
+                        addIncidentToList(result);
+                        updateStatistics();
+                        
+                    } catch (error) {
+                        console.error('Error creating incident:', error);
+                        showToast('Lỗi: ' + error.message, 'error');
+                    } finally {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalText;
+                    }
+                });
+            }
+            
+            // Get current GPS location
+            function getCurrentLocation() {
+                if (!navigator.geolocation) {
+                    showToast('Trình duyệt không hỗ trợ định vị GPS', 'error');
+                    return;
+                }
+                
+                showToast('Đang lấy vị trí...', 'info');
+                
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        document.getElementById('latitude').value = position.coords.latitude.toFixed(6);
+                        document.getElementById('longitude').value = position.coords.longitude.toFixed(6);
+                        showToast('Đã lấy vị trí thành công!', 'success');
+                    },
+                    function(error) {
+                        showToast('Không thể lấy vị trí: ' + error.message, 'error');
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            }
+            
+            // Pick location from map
+            function pickFromMap() {
+                isPickingFromMap = true;
+                showToast('Click vào bản đồ để chọn vị trí sự cố', 'info');
+                document.getElementById('map').style.cursor = 'crosshair';
+                
+                map.once('click', function(e) {
+                    document.getElementById('latitude').value = e.latlng.lat.toFixed(6);
+                    document.getElementById('longitude').value = e.latlng.lng.toFixed(6);
+                    document.getElementById('map').style.cursor = '';
+                    isPickingFromMap = false;
+                    showToast('Đã chọn vị trí: ' + e.latlng.lat.toFixed(4) + ', ' + e.latlng.lng.toFixed(4), 'success');
+                });
+            }
+
+            // Listen for WebSocket updates from layout
+            window.addEventListener('incidentUpdate', function(e) {
+                const message = e.detail;
+                const incident = message.data;
+                
+                incidents[incident.id] = incident;
+                addIncidentToMap(incident);
+                addIncidentToList(incident);
+                
+                if (selectedIncidentId === incident.id) {
+                    showIncidentDetail(incident.id);
+                }
+                
+                updateStatistics();
+            });
+
+            // Initialize on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                initMap();
+                loadIncidents();
+                initCreateIncidentForm();
+                
+                // Fix map size when card is expanded
+                $(document).on('expanded.lte.cardwidget', function() {
+                    setTimeout(() => map.invalidateSize(), 100);
+                });
+            });
+        </script>
+    </th:block>
+</body>
+</html>

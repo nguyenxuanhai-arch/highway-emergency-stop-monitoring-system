@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" 
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layouts/main}">
+<head>
+    <title>Cài đặt hệ thống</title>
+    
+    <th:block layout:fragment="head">
+        <style>
+            .settings-section {
+                background: white;
+                border-radius: 8px;
+                padding: 25px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            }
+            
+            .settings-section h5 {
+                color: #495057;
+                margin-bottom: 20px;
+                padding-bottom: 10px;
+                border-bottom: 2px solid #e9ecef;
+            }
+            
+            .settings-section h5 i {
+                width: 30px;
+            }
+            
+            .setting-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 15px 0;
+                border-bottom: 1px solid #f1f1f1;
+            }
+            
+            .setting-item:last-child {
+                border-bottom: none;
+            }
+            
+            .setting-info h6 {
+                margin: 0;
+                font-weight: 600;
+            }
+            
+            .setting-info p {
+                margin: 5px 0 0;
+                color: #6c757d;
+                font-size: 13px;
+            }
+            
+            .profile-avatar {
+                width: 100px;
+                height: 100px;
+                border-radius: 50%;
+                object-fit: cover;
+                border: 4px solid #e9ecef;
+            }
+            
+            .theme-option {
+                width: 60px;
+                height: 40px;
+                border-radius: 8px;
+                border: 3px solid transparent;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            
+            .theme-option:hover {
+                transform: scale(1.1);
+            }
+            
+            .theme-option.active {
+                border-color: #007bff;
+            }
+            
+            .theme-light { background: linear-gradient(135deg, #f8f9fa 50%, #e9ecef 50%); }
+            .theme-dark { background: linear-gradient(135deg, #343a40 50%, #212529 50%); }
+            .theme-blue { background: linear-gradient(135deg, #007bff 50%, #0056b3 50%); }
+        </style>
+    </th:block>
+</head>
+
+<body>
+    <th:block layout:fragment="content-header">
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-2">
+                    <div class="col-sm-6">
+                        <h1 class="m-0">
+                            <i class="fas fa-cog text-secondary mr-2"></i>Cài đặt hệ thống
+                        </h1>
+                    </div>
+                    <div class="col-sm-6">
+                        <ol class="breadcrumb float-sm-right">
+                            <li class="breadcrumb-item"><a href="/dashboard">Home</a></li>
+                            <li class="breadcrumb-item active">Cài đặt</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+    <th:block layout:fragment="content">
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Profile Settings -->
+                <div class="settings-section">
+                    <h5><i class="fas fa-user"></i>Thông tin tài khoản</h5>
+                    
+                    <div class="row align-items-center mb-4">
+                        <div class="col-auto">
+                            <img src="https://via.placeholder.com/100?text=Avatar" 
+                                 alt="Avatar" class="profile-avatar" id="avatarPreview">
+                        </div>
+                        <div class="col">
+                            <h4 id="userFullName">Đang tải...</h4>
+                            <p class="text-muted mb-2" id="userEmail">--</p>
+                            <button class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-camera mr-1"></i>Đổi ảnh đại diện
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <form id="profileForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Họ và tên</label>
+                                    <input type="text" class="form-control" id="fullName" placeholder="Nguyễn Văn A">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Email</label>
+                                    <input type="email" class="form-control" id="email" disabled>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Số điện thoại</label>
+                                    <input type="tel" class="form-control" id="phone" placeholder="0912345678">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Phòng ban</label>
+                                    <input type="text" class="form-control" value="Trung tâm điều hành" disabled>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save mr-1"></i>Lưu thay đổi
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Password Settings -->
+                <div class="settings-section">
+                    <h5><i class="fas fa-lock"></i>Đổi mật khẩu</h5>
+                    
+                    <form id="passwordForm">
+                        <div class="form-group">
+                            <label>Mật khẩu hiện tại</label>
+                            <input type="password" class="form-control" id="currentPassword" required>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Mật khẩu mới</label>
+                                    <input type="password" class="form-control" id="newPassword" required minlength="6">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Xác nhận mật khẩu mới</label>
+                                    <input type="password" class="form-control" id="confirmPassword" required>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-key mr-1"></i>Đổi mật khẩu
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Notification Settings -->
+                <div class="settings-section">
+                    <h5><i class="fas fa-bell"></i>Cài đặt thông báo</h5>
+                    
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <h6>Thông báo sự cố mới</h6>
+                            <p>Nhận thông báo khi có sự cố mới được phát hiện</p>
+                        </div>
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="notifyNewIncident" checked>
+                            <label class="custom-control-label" for="notifyNewIncident"></label>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <h6>Âm thanh thông báo</h6>
+                            <p>Phát âm thanh khi có thông báo quan trọng</p>
+                        </div>
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="notifySound" checked>
+                            <label class="custom-control-label" for="notifySound"></label>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <h6>Email thông báo</h6>
+                            <p>Gửi email tổng hợp sự cố hàng ngày</p>
+                        </div>
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="notifyEmail">
+                            <label class="custom-control-label" for="notifyEmail"></label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-4">
+                <!-- Theme Settings -->
+                <div class="settings-section">
+                    <h5><i class="fas fa-palette"></i>Giao diện</h5>
+                    
+                    <p class="mb-3">Chọn theme:</p>
+                    <div class="d-flex gap-3 mb-3">
+                        <div class="theme-option theme-light active" data-theme="light" title="Sáng"></div>
+                        <div class="theme-option theme-dark ml-2" data-theme="dark" title="Tối"></div>
+                        <div class="theme-option theme-blue ml-2" data-theme="blue" title="Xanh"></div>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <h6>Sidebar thu gọn</h6>
+                        </div>
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="sidebarCollapsed">
+                            <label class="custom-control-label" for="sidebarCollapsed"></label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Info -->
+                <div class="settings-section">
+                    <h5><i class="fas fa-info-circle"></i>Thông tin hệ thống</h5>
+                    
+                    <table class="table table-sm">
+                        <tr>
+                            <td class="text-muted">Phiên bản</td>
+                            <td class="text-right"><strong>1.0.0</strong></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Server</td>
+                            <td class="text-right"><span class="badge badge-success">Online</span></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">WebSocket</td>
+                            <td class="text-right">
+                                <span class="badge" id="wsStatusBadge">--</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Cập nhật</td>
+                            <td class="text-right">2024-01-01</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Danger Zone -->
+                <div class="settings-section border border-danger">
+                    <h5 class="text-danger"><i class="fas fa-exclamation-triangle"></i>Khu vực nguy hiểm</h5>
+                    
+                    <button class="btn btn-outline-danger btn-block mb-2" onclick="clearCache()">
+                        <i class="fas fa-broom mr-1"></i>Xóa cache
+                    </button>
+                    
+                    <button class="btn btn-danger btn-block" onclick="logout()">
+                        <i class="fas fa-sign-out-alt mr-1"></i>Đăng xuất
+                    </button>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+    <th:block layout:fragment="scripts">
+        <script>
+            // Load user info
+            document.addEventListener('DOMContentLoaded', function() {
+                const userEmail = localStorage.getItem('userEmail') || 'user@example.com';
+                document.getElementById('email').value = userEmail;
+                document.getElementById('userEmail').textContent = userEmail;
+                document.getElementById('userFullName').textContent = userEmail.split('@')[0];
+                
+                // Load settings from localStorage
+                loadSettings();
+                
+                // Update WebSocket status
+                updateWsStatus();
+            });
+            
+            function loadSettings() {
+                const settings = JSON.parse(localStorage.getItem('appSettings') || '{}');
+                
+                document.getElementById('notifyNewIncident').checked = settings.notifyNewIncident !== false;
+                document.getElementById('notifySound').checked = settings.notifySound !== false;
+                document.getElementById('notifyEmail').checked = settings.notifyEmail === true;
+                document.getElementById('sidebarCollapsed').checked = settings.sidebarCollapsed === true;
+                
+                // Theme
+                const theme = settings.theme || 'light';
+                document.querySelectorAll('.theme-option').forEach(el => {
+                    el.classList.toggle('active', el.dataset.theme === theme);
+                });
+            }
+            
+            function saveSettings() {
+                const settings = {
+                    notifyNewIncident: document.getElementById('notifyNewIncident').checked,
+                    notifySound: document.getElementById('notifySound').checked,
+                    notifyEmail: document.getElementById('notifyEmail').checked,
+                    sidebarCollapsed: document.getElementById('sidebarCollapsed').checked,
+                    theme: document.querySelector('.theme-option.active')?.dataset.theme || 'light'
+                };
+                
+                localStorage.setItem('appSettings', JSON.stringify(settings));
+                showToast('Đã lưu cài đặt!', 'success');
+            }
+            
+            // Theme selection
+            document.querySelectorAll('.theme-option').forEach(el => {
+                el.addEventListener('click', function() {
+                    document.querySelectorAll('.theme-option').forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    saveSettings();
+                });
+            });
+            
+            // Notification toggles
+            document.querySelectorAll('.custom-control-input').forEach(el => {
+                el.addEventListener('change', saveSettings);
+            });
+            
+            // Profile form
+            document.getElementById('profileForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                showToast('Đã cập nhật thông tin!', 'success');
+            });
+            
+            // Password form
+            document.getElementById('passwordForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const newPass = document.getElementById('newPassword').value;
+                const confirmPass = document.getElementById('confirmPassword').value;
+                
+                if (newPass !== confirmPass) {
+                    showToast('Mật khẩu xác nhận không khớp!', 'error');
+                    return;
+                }
+                
+                // In real app, call API to change password
+                showToast('Đã đổi mật khẩu thành công!', 'success');
+                this.reset();
+            });
+            
+            function updateWsStatus() {
+                const badge = document.getElementById('wsStatusBadge');
+                // Check WebSocket connection from main layout
+                if (typeof wsConnected !== 'undefined' && wsConnected) {
+                    badge.className = 'badge badge-success';
+                    badge.textContent = 'Connected';
+                } else {
+                    badge.className = 'badge badge-danger';
+                    badge.textContent = 'Disconnected';
+                }
+            }
+            
+            function clearCache() {
+                if (!confirm('Xóa tất cả dữ liệu cache? Bạn có thể cần đăng nhập lại.')) return;
+                
+                // Keep auth token
+                const token = localStorage.getItem('token');
+                localStorage.clear();
+                if (token) localStorage.setItem('token', token);
+                
+                showToast('Đã xóa cache!', 'success');
+            }
+            
+            function logout() {
+                if (!confirm('Bạn có chắc muốn đăng xuất?')) return;
+                
+                localStorage.removeItem('token');
+                localStorage.removeItem('userEmail');
+                window.location.href = '/login.html';
+            }
+            
+            // Update WS status periodically
+            setInterval(updateWsStatus, 5000);
+        </script>
+    </th:block>
+</body>
+</html>

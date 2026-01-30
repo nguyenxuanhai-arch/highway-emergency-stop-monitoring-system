@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" 
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layouts/main}">
+<head>
+    <title>Thống kê sự cố</title>
+    
+    <th:block layout:fragment="head">
+        <style>
+            .stat-card {
+                border-radius: 12px;
+                transition: transform 0.3s ease;
+            }
+            
+            .stat-card:hover {
+                transform: translateY(-5px);
+            }
+            
+            .stat-icon {
+                width: 60px;
+                height: 60px;
+                border-radius: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 24px;
+            }
+            
+            .stat-value {
+                font-size: 2rem;
+                font-weight: 700;
+            }
+            
+            .chart-container {
+                position: relative;
+                height: 300px;
+            }
+            
+            .date-filter-form {
+                background: #f8f9fa;
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+            }
+            
+            .trend-up { color: #28a745; }
+            .trend-down { color: #dc3545; }
+        </style>
+    </th:block>
+</head>
+
+<body>
+    <th:block layout:fragment="content-header">
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-2">
+                    <div class="col-sm-6">
+                        <h1 class="m-0">
+                            <i class="fas fa-chart-bar text-primary mr-2"></i>Thống kê sự cố
+                        </h1>
+                    </div>
+                    <div class="col-sm-6">
+                        <ol class="breadcrumb float-sm-right">
+                            <li class="breadcrumb-item"><a href="/dashboard">Home</a></li>
+                            <li class="breadcrumb-item"><a href="#">Báo cáo</a></li>
+                            <li class="breadcrumb-item active">Thống kê</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+    <th:block layout:fragment="content">
+        <!-- Date Filter -->
+        <div class="date-filter-form">
+            <form class="form-inline" id="dateFilterForm">
+                <label class="mr-2"><i class="fas fa-calendar-alt mr-1"></i>Khoảng thời gian:</label>
+                <input type="date" class="form-control mr-2" id="startDate">
+                <span class="mr-2">đến</span>
+                <input type="date" class="form-control mr-2" id="endDate">
+                <button type="submit" class="btn btn-primary mr-2">
+                    <i class="fas fa-filter mr-1"></i>Lọc
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="setPresetRange('week')">7 ngày</button>
+                <button type="button" class="btn btn-secondary ml-1" onclick="setPresetRange('month')">30 ngày</button>
+                <button type="button" class="btn btn-secondary ml-1" onclick="setPresetRange('year')">Năm nay</button>
+            </form>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="row">
+            <div class="col-lg-3 col-md-6">
+                <div class="card stat-card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="stat-icon bg-primary text-white mr-3">
+                                <i class="fas fa-car-crash"></i>
+                            </div>
+                            <div>
+                                <h6 class="text-muted mb-1">Tổng sự cố</h6>
+                                <div class="stat-value" id="totalIncidents">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card stat-card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="stat-icon bg-success text-white mr-3">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div>
+                                <h6 class="text-muted mb-1">Đã xử lý</h6>
+                                <div class="stat-value" id="resolvedIncidents">0</div>
+                                <small class="text-success" id="resolvedPercent">0%</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card stat-card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="stat-icon bg-warning text-white mr-3">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div>
+                                <h6 class="text-muted mb-1">Đang xử lý</h6>
+                                <div class="stat-value" id="pendingIncidents">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card stat-card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="stat-icon bg-info text-white mr-3">
+                                <i class="fas fa-stopwatch"></i>
+                            </div>
+                            <div>
+                                <h6 class="text-muted mb-1">TB thời gian XL</h6>
+                                <div class="stat-value" id="avgResolutionTime">--</div>
+                                <small class="text-muted">phút</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row">
+            <!-- Incidents by Day Chart -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-chart-line mr-2"></i>Sự cố theo ngày</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="dailyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Status Distribution Chart -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-chart-pie mr-2"></i>Phân bố trạng thái</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="statusChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- More Charts -->
+        <div class="row">
+            <!-- Hourly Distribution -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-clock mr-2"></i>Sự cố theo giờ trong ngày</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="hourlyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Resolution Time Distribution -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-hourglass-half mr-2"></i>Thời gian xử lý</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="resolutionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-table mr-2"></i>Chi tiết thống kê theo ngày</h3>
+                <div class="card-tools">
+                    <button class="btn btn-tool" onclick="exportCSV()">
+                        <i class="fas fa-download"></i> Export CSV
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered table-striped" id="statsTable">
+                    <thead>
+                        <tr>
+                            <th>Ngày</th>
+                            <th>Tổng sự cố</th>
+                            <th>Mới phát hiện</th>
+                            <th>Đang xử lý</th>
+                            <th>Đã xử lý</th>
+                            <th>TB thời gian XL (phút)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="statsTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </th:block>
+
+    <th:block layout:fragment="scripts">
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+        <script th:inline="none">
+            let dailyChart, statusChart, hourlyChart, resolutionChart;
+            let allIncidents = [];
+            let filteredIncidents = [];
+            
+            // Initialize
+            document.addEventListener('DOMContentLoaded', function() {
+                setPresetRange('month');
+                initCharts();
+            });
+            
+            function setPresetRange(preset) {
+                const end = new Date();
+                const start = new Date();
+                
+                switch(preset) {
+                    case 'week':
+                        start.setDate(end.getDate() - 7);
+                        break;
+                    case 'month':
+                        start.setDate(end.getDate() - 30);
+                        break;
+                    case 'year':
+                        start.setMonth(0, 1);
+                        break;
+                }
+                
+                document.getElementById('startDate').value = start.toISOString().split('T')[0];
+                document.getElementById('endDate').value = end.toISOString().split('T')[0];
+                
+                loadData();
+            }
+            
+            document.getElementById('dateFilterForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                loadData();
+            });
+            
+            function loadData() {
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                
+                fetch('/api/incidents', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    allIncidents = data;
+                    
+                    // Filter by date range
+                    filteredIncidents = allIncidents.filter(i => {
+                        const date = new Date(i.detectionTime).toISOString().split('T')[0];
+                        return date >= startDate && date <= endDate;
+                    });
+                    
+                    updateSummary();
+                    updateCharts();
+                    updateTable();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Lỗi tải dữ liệu', 'error');
+                });
+            }
+            
+            function updateSummary() {
+                const total = filteredIncidents.length;
+                const resolved = filteredIncidents.filter(i => i.status === 'RESOLVED').length;
+                const pending = filteredIncidents.filter(i => i.status !== 'RESOLVED').length;
+                
+                document.getElementById('totalIncidents').textContent = total;
+                document.getElementById('resolvedIncidents').textContent = resolved;
+                document.getElementById('pendingIncidents').textContent = pending;
+                document.getElementById('resolvedPercent').textContent = 
+                    total > 0 ? Math.round((resolved/total)*100) + '%' : '0%';
+                
+                // Calculate average resolution time
+                const resolvedWithTime = filteredIncidents.filter(i => 
+                    i.status === 'RESOLVED' && i.resolutionTime && i.detectionTime
+                );
+                
+                if (resolvedWithTime.length > 0) {
+                    const totalMinutes = resolvedWithTime.reduce((sum, i) => {
+                        const detection = new Date(i.detectionTime);
+                        const resolution = new Date(i.resolutionTime);
+                        return sum + (resolution - detection) / 60000;
+                    }, 0);
+                    document.getElementById('avgResolutionTime').textContent = 
+                        Math.round(totalMinutes / resolvedWithTime.length);
+                } else {
+                    document.getElementById('avgResolutionTime').textContent = '--';
+                }
+            }
+            
+            function initCharts() {
+                // Daily Chart
+                const dailyCtx = document.getElementById('dailyChart').getContext('2d');
+                dailyChart = new Chart(dailyCtx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Sự cố',
+                            data: [],
+                            borderColor: '#007bff',
+                            backgroundColor: 'rgba(0,123,255,0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                        }
+                    }
+                });
+                
+                // Status Chart
+                const statusCtx = document.getElementById('statusChart').getContext('2d');
+                statusChart = new Chart(statusCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Mới phát hiện', 'Đang xử lý', 'Đã xử lý'],
+                        datasets: [{
+                            data: [0, 0, 0],
+                            backgroundColor: ['#dc3545', '#ffc107', '#28a745']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        }
+                    }
+                });
+                
+                // Hourly Chart
+                const hourlyCtx = document.getElementById('hourlyChart').getContext('2d');
+                hourlyChart = new Chart(hourlyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: Array.from({length: 24}, (_, i) => i + 'h'),
+                        datasets: [{
+                            label: 'Số sự cố',
+                            data: Array(24).fill(0),
+                            backgroundColor: 'rgba(0,123,255,0.6)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                        }
+                    }
+                });
+                
+                // Resolution Time Chart
+                const resolutionCtx = document.getElementById('resolutionChart').getContext('2d');
+                resolutionChart = new Chart(resolutionCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['<15p', '15-30p', '30-60p', '1-2h', '>2h'],
+                        datasets: [{
+                            label: 'Số sự cố',
+                            data: [0, 0, 0, 0, 0],
+                            backgroundColor: ['#28a745', '#7bc043', '#ffc107', '#ff851b', '#dc3545']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                        }
+                    }
+                });
+            }
+            
+            function updateCharts() {
+                // Daily Chart
+                const dailyData = {};
+                filteredIncidents.forEach(i => {
+                    const date = new Date(i.detectionTime).toISOString().split('T')[0];
+                    dailyData[date] = (dailyData[date] || 0) + 1;
+                });
+                
+                const sortedDates = Object.keys(dailyData).sort();
+                dailyChart.data.labels = sortedDates.map(d => {
+                    const date = new Date(d);
+                    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+                });
+                dailyChart.data.datasets[0].data = sortedDates.map(d => dailyData[d]);
+                dailyChart.update();
+                
+                // Status Chart
+                const statusData = [
+                    filteredIncidents.filter(i => i.status === 'DETECTED').length,
+                    filteredIncidents.filter(i => i.status === 'CONFIRMED').length,
+                    filteredIncidents.filter(i => i.status === 'RESOLVED').length
+                ];
+                statusChart.data.datasets[0].data = statusData;
+                statusChart.update();
+                
+                // Hourly Chart
+                const hourlyData = Array(24).fill(0);
+                filteredIncidents.forEach(i => {
+                    const hour = new Date(i.detectionTime).getHours();
+                    hourlyData[hour]++;
+                });
+                hourlyChart.data.datasets[0].data = hourlyData;
+                hourlyChart.update();
+                
+                // Resolution Time Chart
+                const resolutionData = [0, 0, 0, 0, 0]; // <15, 15-30, 30-60, 60-120, >120
+                filteredIncidents.filter(i => i.resolutionTime).forEach(i => {
+                    const minutes = (new Date(i.resolutionTime) - new Date(i.detectionTime)) / 60000;
+                    if (minutes < 15) resolutionData[0]++;
+                    else if (minutes < 30) resolutionData[1]++;
+                    else if (minutes < 60) resolutionData[2]++;
+                    else if (minutes < 120) resolutionData[3]++;
+                    else resolutionData[4]++;
+                });
+                resolutionChart.data.datasets[0].data = resolutionData;
+                resolutionChart.update();
+            }
+            
+            function updateTable() {
+                const dailyStats = {};
+                
+                filteredIncidents.forEach(i => {
+                    const date = new Date(i.detectionTime).toISOString().split('T')[0];
+                    if (!dailyStats[date]) {
+                        dailyStats[date] = { total: 0, detected: 0, confirmed: 0, resolved: 0, resolutionTimes: [] };
+                    }
+                    dailyStats[date].total++;
+                    dailyStats[date][i.status.toLowerCase()]++;
+                    
+                    if (i.resolutionTime) {
+                        const minutes = (new Date(i.resolutionTime) - new Date(i.detectionTime)) / 60000;
+                        dailyStats[date].resolutionTimes.push(minutes);
+                    }
+                });
+                
+                const tbody = document.getElementById('statsTableBody');
+                tbody.innerHTML = Object.keys(dailyStats).sort().reverse().map(date => {
+                    const s = dailyStats[date];
+                    const avgTime = s.resolutionTimes.length > 0
+                        ? Math.round(s.resolutionTimes.reduce((a,b) => a+b, 0) / s.resolutionTimes.length)
+                        : '--';
+                    
+                    return `
+                        <tr>
+                            <td>${new Date(date).toLocaleDateString('vi-VN')}</td>
+                            <td><strong>${s.total}</strong></td>
+                            <td><span class="badge badge-danger">${s.detected}</span></td>
+                            <td><span class="badge badge-warning">${s.confirmed}</span></td>
+                            <td><span class="badge badge-success">${s.resolved}</span></td>
+                            <td>${avgTime}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+            
+            function exportCSV() {
+                const rows = [["Ngày", "Tổng", "Mới phát hiện", "Đang xử lý", "Đã xử lý"]];
+                
+                const dailyStats = {};
+                filteredIncidents.forEach(i => {
+                    const date = new Date(i.detectionTime).toISOString().split('T')[0];
+                    if (!dailyStats[date]) {
+                        dailyStats[date] = { total: 0, detected: 0, confirmed: 0, resolved: 0 };
+                    }
+                    dailyStats[date].total++;
+                    dailyStats[date][i.status.toLowerCase()]++;
+                });
+                
+                Object.keys(dailyStats).sort().forEach(date => {
+                    const s = dailyStats[date];
+                    rows.push([date, s.total, s.detected, s.confirmed, s.resolved]);
+                });
+                
+                const csv = rows.map(r => r.join(',')).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'incident_statistics.csv';
+                a.click();
+            }
+            /*]]>*/
+        </script>
+    </th:block>
+</body>
+</html>

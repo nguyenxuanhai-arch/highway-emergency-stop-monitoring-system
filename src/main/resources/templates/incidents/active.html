@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" 
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layouts/main}">
+<head>
+    <title>Sự cố đang xử lý</title>
+    
+    <th:block layout:fragment="head">
+        <style>
+            .incident-card {
+                transition: all 0.3s ease;
+                border-left: 4px solid transparent;
+            }
+            
+            .incident-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            }
+            
+            .incident-card.status-detected {
+                border-left-color: #dc3545;
+            }
+            
+            .incident-card.status-confirmed {
+                border-left-color: #ffc107;
+            }
+            
+            .incident-status {
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 600;
+                text-transform: uppercase;
+            }
+
+            .status-detected { background: #f8d7da; color: #721c24; }
+            .status-confirmed { background: #fff3cd; color: #856404; }
+            
+            .incident-thumbnail {
+                width: 80px;
+                height: 80px;
+                border-radius: 8px;
+                object-fit: cover;
+            }
+            
+            .time-badge {
+                font-size: 11px;
+                padding: 3px 8px;
+            }
+            
+            .priority-high {
+                animation: pulse-border 2s infinite;
+            }
+            
+            @keyframes pulse-border {
+                0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
+                50% { box-shadow: 0 0 0 8px rgba(220, 53, 69, 0); }
+            }
+        </style>
+    </th:block>
+</head>
+
+<body>
+    <th:block layout:fragment="content-header">
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-2">
+                    <div class="col-sm-6">
+                        <h1 class="m-0">
+                            <i class="fas fa-exclamation-triangle text-warning mr-2"></i>Sự cố đang xử lý
+                        </h1>
+                    </div>
+                    <div class="col-sm-6">
+                        <ol class="breadcrumb float-sm-right">
+                            <li class="breadcrumb-item"><a href="/dashboard">Home</a></li>
+                            <li class="breadcrumb-item"><a href="#">Quản lý sự cố</a></li>
+                            <li class="breadcrumb-item active">Đang xử lý</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+    <th:block layout:fragment="content">
+        <!-- Summary Cards -->
+        <div class="row">
+            <div class="col-md-4">
+                <div class="info-box bg-danger">
+                    <span class="info-box-icon"><i class="fas fa-exclamation-circle"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Mới phát hiện</span>
+                        <span class="info-box-number" id="countDetected">0</span>
+                        <span class="progress-description">Cần xác nhận ngay</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="info-box bg-warning">
+                    <span class="info-box-icon"><i class="fas fa-spinner"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Đang xử lý</span>
+                        <span class="info-box-number" id="countConfirmed">0</span>
+                        <span class="progress-description">Đã xác nhận, chờ xử lý</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="info-box bg-info">
+                    <span class="info-box-icon"><i class="fas fa-clock"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Thời gian xử lý TB</span>
+                        <span class="info-box-number" id="avgTime">--</span>
+                        <span class="progress-description">Tính từ lúc phát hiện</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Incidents List -->
+        <div class="card card-outline card-warning">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-list mr-2"></i>Danh sách sự cố cần xử lý
+                </h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" onclick="loadActiveIncidents()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body" id="incidentsContainer">
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                    <p>Đang tải dữ liệu...</p>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+    <th:block layout:fragment="scripts">
+        <script>
+            let activeIncidents = [];
+            
+            function loadActiveIncidents() {
+                fetch('/api/incidents', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Filter only DETECTED and CONFIRMED
+                    activeIncidents = data.filter(i => i.status === 'DETECTED' || i.status === 'CONFIRMED');
+                    renderIncidents();
+                    updateCounts();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Lỗi tải dữ liệu', 'error');
+                });
+            }
+            
+            function renderIncidents() {
+                const container = document.getElementById('incidentsContainer');
+                
+                if (activeIncidents.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                            <h5>Tuyệt vời!</h5>
+                            <p>Không có sự cố nào đang chờ xử lý</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Sort by detection time (newest first) and status (DETECTED first)
+                activeIncidents.sort((a, b) => {
+                    if (a.status !== b.status) {
+                        return a.status === 'DETECTED' ? -1 : 1;
+                    }
+                    return new Date(b.detectionTime) - new Date(a.detectionTime);
+                });
+                
+                container.innerHTML = activeIncidents.map(incident => {
+                    const statusClass = `status-${incident.status.toLowerCase()}`;
+                    const isUrgent = incident.status === 'DETECTED';
+                    const timeSinceDetection = getTimeSince(incident.detectionTime);
+                    
+                    return `
+                        <div class="card incident-card ${statusClass} ${isUrgent ? 'priority-high' : ''} mb-3">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-auto">
+                                        ${incident.images && incident.images.length > 0 
+                                            ? `<img src="/api/incidents/image/${incident.images[0].filePath}" 
+                                                    class="incident-thumbnail"
+                                                    onerror="this.src='https://via.placeholder.com/80?text=N/A'">`
+                                            : `<div class="incident-thumbnail bg-secondary d-flex align-items-center justify-content-center">
+                                                    <i class="fas fa-image text-white"></i>
+                                               </div>`
+                                        }
+                                    </div>
+                                    <div class="col">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div>
+                                                <span class="incident-status ${statusClass} mr-2">
+                                                    ${incident.status === 'DETECTED' ? 'Mới phát hiện' : 'Đang xử lý'}
+                                                </span>
+                                                <span class="badge badge-secondary time-badge">
+                                                    <i class="far fa-clock mr-1"></i>${timeSinceDetection}
+                                                </span>
+                                            </div>
+                                            <span class="text-muted">#${incident.id}</span>
+                                        </div>
+                                        <h5 class="mb-1">${escapeHtml(incident.description)}</h5>
+                                        <p class="mb-0 text-muted small">
+                                            <i class="fas fa-map-marker-alt mr-1"></i>
+                                            ${incident.latitude.toFixed(4)}, ${incident.longitude.toFixed(4)}
+                                            <span class="mx-2">|</span>
+                                            <i class="far fa-clock mr-1"></i>
+                                            ${new Date(incident.detectionTime).toLocaleString('vi-VN')}
+                                        </p>
+                                    </div>
+                                    <div class="col-auto">
+                                        <div class="btn-group-vertical">
+                                            ${incident.status === 'DETECTED' ? `
+                                                <button class="btn btn-warning btn-sm mb-1" onclick="confirmIncident(${incident.id})">
+                                                    <i class="fas fa-check mr-1"></i>Xác nhận
+                                                </button>
+                                            ` : ''}
+                                            <button class="btn btn-success btn-sm mb-1" onclick="resolveIncident(${incident.id})">
+                                                <i class="fas fa-check-double mr-1"></i>Hoàn thành
+                                            </button>
+                                            <a href="/incidents/${incident.id}" class="btn btn-info btn-sm">
+                                                <i class="fas fa-eye mr-1"></i>Chi tiết
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            function updateCounts() {
+                const detected = activeIncidents.filter(i => i.status === 'DETECTED').length;
+                const confirmed = activeIncidents.filter(i => i.status === 'CONFIRMED').length;
+                
+                document.getElementById('countDetected').textContent = detected;
+                document.getElementById('countConfirmed').textContent = confirmed;
+            }
+            
+            function getTimeSince(dateStr) {
+                const diff = Date.now() - new Date(dateStr).getTime();
+                const minutes = Math.floor(diff / 60000);
+                const hours = Math.floor(minutes / 60);
+                const days = Math.floor(hours / 24);
+                
+                if (days > 0) return `${days} ngày trước`;
+                if (hours > 0) return `${hours} giờ trước`;
+                if (minutes > 0) return `${minutes} phút trước`;
+                return 'Vừa xong';
+            }
+            
+            function confirmIncident(id) {
+                if (!confirm('Xác nhận sự cố #' + id + '?')) return;
+                
+                fetch(`/api/incidents/${id}/confirm`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                })
+                .then(response => response.json())
+                .then(() => {
+                    showToast('Đã xác nhận sự cố!', 'success');
+                    loadActiveIncidents();
+                })
+                .catch(() => showToast('Lỗi xác nhận!', 'error'));
+            }
+            
+            function resolveIncident(id) {
+                if (!confirm('Đánh dấu sự cố #' + id + ' đã xử lý xong?')) return;
+                
+                fetch(`/api/incidents/${id}/resolve`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                })
+                .then(response => response.json())
+                .then(() => {
+                    showToast('Đã xử lý xong!', 'success');
+                    loadActiveIncidents();
+                })
+                .catch(() => showToast('Lỗi xử lý!', 'error'));
+            }
+            
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            // Listen for WebSocket updates
+            window.addEventListener('incidentUpdate', function() {
+                loadActiveIncidents();
+            });
+            
+            document.addEventListener('DOMContentLoaded', loadActiveIncidents);
+        </script>
+    </th:block>
+</body>
+</html>
